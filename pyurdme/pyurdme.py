@@ -607,7 +607,7 @@ class URDMEModel(Model):
                 raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords,my_volume))
             return smallest_ndx
     
-        self.u0 = numpy.zeros(self.model.u0.shape)
+        self.u0 = numpy.zeros(self.u0.shape)
         result_sd = result.model.get_subdomain_vector()
         result_coords = result.model.mesh.get_voxels()
         sd = self.get_subdomain_vector()
