@@ -589,6 +589,36 @@ class URDMEModel(Model):
             specindx = species_map[spec_name]
             self.u0[specindx, voxel] = (self.u0[specindx,voxel] if add else 0) + num_spec
 
+    def set_initial_condition_from_result_different_mesh(self, result):
+        """ Create the initial conditions for this model from a result object from model with 
+            a different mesh (but same number of species, and subdomains).
+        """
+        def __find_closest_voxel(local_sd_vec, local_coords_vec, my_sd, my_coords, my_volume=0.0):
+            reppoint = numpy.tile(my_coords, (local_coords_vec.shape[0], 1))
+            dist = numpy.sqrt(numpy.sum((coords-reppoint)**2, axis=1))
+            smallest_ndx = None
+            smallest_dist = -1
+            for v_ndx, sd in enumerate(local_sd_vec):
+                if sd == my_sd:
+                    if smallest_ndx is None or dist[v_ndx] < smallest_dist:
+                        smallest_ndx = v_ndx
+                        smallest_dist = dist[v_ndx]
+            if smallest_ndx is None:
+                raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords,my_volume))
+            return smallest_ndx
+    
+        self.u0 = numpy.zeros(self.model.u0.shape)
+        result_sd = result.model.get_subdomain_vector()
+        result_coords = result.model.mesh.get_voxels()
+        sd = self.get_subdomain_vector()
+        coords = self.mesh.coordinates()
+        for s, sname in enumerate(result.model.listOfSpecies):
+            scounts = result.get_species(sname, timepoints=-1)
+            for from_v_ndx, s_count in enumerate(scounts):
+                for _ in range(s_count):
+                    to_v_ndx = __find_closest_voxel(sd, coords, result_sd[from_v_ndx], result_coords[from_v_ndx])
+                    self.u0[s,to_v_ndx] += 1
+
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
             is built by concatenating the individually assembled matrices for each of the species,
