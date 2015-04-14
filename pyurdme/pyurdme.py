@@ -615,7 +615,7 @@ class URDMEModel(Model):
         for s, sname in enumerate(result.model.listOfSpecies):
             scounts = result.get_species(sname, timepoints=-1)
             for from_v_ndx, s_count in enumerate(scounts):
-                for _ in range(s_count):
+                for _ in range(int(s_count)):
                     to_v_ndx = __find_closest_voxel(sd, coords, result_sd[from_v_ndx], result_coords[from_v_ndx])
                     self.u0[s,to_v_ndx] += 1
 
