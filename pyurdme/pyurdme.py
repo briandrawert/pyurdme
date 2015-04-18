@@ -594,7 +594,16 @@ class URDMEModel(Model):
             a different mesh (but same number of species, and subdomains).
         """
         def __find_closest_voxel(local_sd_vec, local_coords_vec, my_sd, my_coords, my_volume=0.0):
-            reppoint = numpy.tile(my_coords, (local_coords_vec.shape[0], 1))
+            if my_volume > 0:
+                r_max = (3*my_volume/4/numpy.pi)**(1/3)
+                r_max2 = r_max**2
+                xyz_offset = numpy.random.uniform(low=-r_max, high=r_max, size=3) #random direction
+                r_tot = numpy.random.uniform(low=0, high=r_max, size=1) #random distance
+                x_tot = numpy.sqrt(numpy.sum(xyz_offset**2))
+                my_coords2 = my_coords + xyz_offset*(r_tot/x_tot)
+            else:
+                my_coords2 = my_coords
+            reppoint = numpy.tile(my_coords2, (local_coords_vec.shape[0], 1))
             dist = numpy.sqrt(numpy.sum((coords-reppoint)**2, axis=1))
             smallest_ndx = None
             smallest_dist = -1
@@ -604,7 +613,7 @@ class URDMEModel(Model):
                         smallest_ndx = v_ndx
                         smallest_dist = dist[v_ndx]
             if smallest_ndx is None:
-                raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords,my_volume))
+                raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords2,my_volume))
             return smallest_ndx
     
         self.u0 = numpy.zeros(self.u0.shape)
