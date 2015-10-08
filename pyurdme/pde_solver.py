@@ -60,6 +60,7 @@ class PDESolver(pyurdme.URDMESolver):
         sd = self.model.get_solver_datastructure()
         D = sd['D']
         N = sd['N']
+        DataVec = sd['data']
         (xlen, ylen) = D.shape
         species_offset={}
         for snum, sname in enumerate(self.model.listOfSpecies.keys()):
@@ -112,12 +113,22 @@ class PDESolver(pyurdme.URDMESolver):
                         terms.append("{0}*{1}".format(N[sndx,rndx], "*".join(reactnt_terms)))
                     else:
                         #sys.stderr.write('is custom: {0} {1}\n'.format(N[sndx,rndx], self.model.listOfReactions[R].propensity_function))
-                        #TODO replace DataFunctions definitions with values
-                        terms.append("{0}*({1})".format(N[sndx,rndx], self.model.listOfReactions[R].propensity_function))
+                        prop_fn = self.model.listOfReactions[R].propensity_function
+                        # Replace DataFunctions definitions with values
+                        for dndx,d in enumerate(self.model.listOfDataFunctions):
+                            if d.name is None:
+                                raise URDMEError("DataFunction {0} does not have a name attributed defined.".format(i))
+                            if d.name in prop_fn:
+                                dval = DataVec[dndx,vndx]
+                                prop_fn.replace(d.name,str(dval))
+                        # Custom Term
+                        terms.append("{0}*({1})".format(N[sndx,rndx], prop_fn))
+                # Join all terms for this DOF
                 func_str+= "    {0} ,\n".format(" + ".join(terms))
         func_str+= "    ]\n"
         #print func_str
         
+        # Compile the derivative function
         self.derivative_fn = self._exec_python_derivative_function(func_str)
         
 
