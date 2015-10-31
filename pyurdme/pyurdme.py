@@ -577,7 +577,7 @@ class URDMEModel(Model):
         """ Create the initial conditions for this model from a result object from model with 
             a different mesh (but same number of species, and subdomains).
         """
-        def __find_closest_voxel(local_sd_vec, local_coords_vec, my_sd, my_coords, my_volume=0.0):
+        def __find_closest_voxel(local_sd_vec, local_coords_vec, sd_list, my_coords, my_volume=0.0):
             if my_volume > 0:
                 r_max = (3*my_volume/4/numpy.pi)**(1/3)
                 r_max2 = r_max**2
@@ -592,7 +592,7 @@ class URDMEModel(Model):
             smallest_ndx = None
             smallest_dist = -1
             for v_ndx, sd in enumerate(local_sd_vec):
-                if sd == my_sd:
+                if sd_list is None or sd in sd_list:
                     if smallest_ndx is None or dist[v_ndx] < smallest_dist:
                         smallest_ndx = v_ndx
                         smallest_dist = dist[v_ndx]
@@ -600,6 +600,8 @@ class URDMEModel(Model):
                 raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords2,my_volume))
             return smallest_ndx
     
+        if not hasattr(self, "u0"):
+            self.initialize_initial_condition()
         self.u0 = numpy.zeros(self.u0.shape)
         result_sd = result.model.get_subdomain_vector()
         result_coords = result.model.mesh.get_voxels()
@@ -607,9 +609,10 @@ class URDMEModel(Model):
         coords = self.mesh.coordinates()
         for s, sname in enumerate(result.model.listOfSpecies):
             scounts = result.get_species(sname, timepoints=-1)
+            sd_list = self.species_to_subdomains.get(s)
             for from_v_ndx, s_count in enumerate(scounts):
                 for _ in range(int(s_count)):
-                    to_v_ndx = __find_closest_voxel(sd, coords, result_sd[from_v_ndx], result_coords[from_v_ndx])
+                    to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx])
                     self.u0[s,to_v_ndx] += 1
 
     def create_system_matrix(self):
