@@ -592,8 +592,8 @@ class URDMEModel(Model):
             dist = numpy.sqrt(numpy.sum((coords-reppoint)**2, axis=1))
             smallest_ndx = None
             smallest_dist = -1
-            for v_ndx, sd in enumerate(local_sd_vec):
-                if sd_list is None or sd in sd_list:
+            for v_ndx, sd2 in enumerate(local_sd_vec):
+                if sd_list is None or sd2 in sd_list:
                     if smallest_ndx is None or dist[v_ndx] < smallest_dist:
                         smallest_ndx = v_ndx
                         smallest_dist = dist[v_ndx]
@@ -613,8 +613,9 @@ class URDMEModel(Model):
             sd_list = self.species_to_subdomains.get(s)
             for from_v_ndx, s_count in enumerate(scounts):
                 for _ in range(int(s_count)):
-                    to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx])
-                    self.u0[s,to_v_ndx] += 1
+                    #to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx])
+                    #self.u0[s,to_v_ndx] += 1
+                    self.set_initial_condition_place_near(self, {s:1}, point=coords, add=True)
 
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
