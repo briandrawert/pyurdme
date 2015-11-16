@@ -615,7 +615,9 @@ class URDMEModel(Model):
                 for _ in range(int(s_count)):
                     #to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx])
                     #self.u0[s,to_v_ndx] += 1
-                    self.set_initial_condition_place_near(self, {s:1}, point=coords, add=True)
+                    #print "point",result_coords[from_v_ndx]
+                    #self.set_initial_condition_place_near(self, {s:1}, point=result_coords[from_v_ndx], add=True)
+                    self.set_initial_condition_place_near({result.model.listOfSpecies[sname]:1}, result_coords[from_v_ndx], True)
 
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
