@@ -84,6 +84,7 @@ class URDMEModel(Model):
         #
         self.sd = []
         self.sd_initialized = False
+        self._solver_data_structure = None
 
         self.mesh = None
         self.xmesh = None
@@ -494,7 +495,12 @@ class URDMEModel(Model):
             if subdomains is None:
                 subdomains = self.species_to_subdomains[species]
 
-            spec_name = species.name
+            if isinstance(species, str):
+                spec_name = species
+            elif isinstance(species ,pyurdme.Species):
+                spec_name = species.name
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
             num_spec = spec_init[species]
             species_map = self.get_species_map()
             specindx = species_map[spec_name]
@@ -525,11 +531,16 @@ class URDMEModel(Model):
         self._initialize_species_to_subdomains()
 
         species_map = self.get_species_map()
-        for spec in spec_init:
+        for species in spec_init:
             if subdomains is None:
-                subdomains = self.species_to_subdomains[spec]
-            spec_name = spec.name
-            num_spec = spec_init[spec]
+                subdomains = self.species_to_subdomains[species]
+            if isinstance(species, str):
+                spec_name = species
+            elif isinstance(species ,pyurdme.Species):
+                spec_name = species.name
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
+            num_spec = spec_init[species]
             specindx = species_map[spec_name]
             for ndx in range(len(self.sd)):
                 if self.sd[ndx] in subdomains:
@@ -546,9 +557,14 @@ class URDMEModel(Model):
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
 
-        for spec in spec_init:
-            spec_name = spec.name
-            num_spec = spec_init[spec]
+        for species in spec_init:
+            if isinstance(species, str):
+                spec_name = species
+            elif isinstance(species ,pyurdme.Species):
+                spec_name = species.name
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
+            num_spec = spec_init[species]
 
             # Find the voxel with center (vertex) nearest to the point
             ix = self.mesh.closest_vertex(point)
@@ -565,9 +581,14 @@ class URDMEModel(Model):
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
 
-        for spec in spec_init:
-            spec_name = spec.name
-            num_spec = spec_init[spec]
+        for species in spec_init:
+            if isinstance(species, str):
+                spec_name = species
+            elif isinstance(species ,pyurdme.Species):
+                spec_name = species.name
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
+            num_spec = spec_init[species]
 
             species_map = self.get_species_map()
             specindx = species_map[spec_name]
@@ -614,7 +635,7 @@ class URDMEModel(Model):
                 for _ in range(int(s_count)):
                     #to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx])
                     #self.u0[s,to_v_ndx] += 1
-                    self.set_initial_condition_place_near(self, {s:1}, point=coords, add=True)
+                    self.set_initial_condition_place_near(self, {s:1}, point=result_coords[from_v_ndx], add=True)
 
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
@@ -793,6 +814,9 @@ class URDMEModel(Model):
            K - a (Nvoxel x Nvoxel) connectivity matrix
 
         """
+
+        if self._solver_data_structure is not None:
+            return self._solver_data_structure
         
         urdme_solver_data = {}
         num_species = self.get_num_species()
@@ -885,6 +909,8 @@ class URDMEModel(Model):
         urdme_solver_data['K'] = self.create_connectivity_matrix()
 
         urdme_solver_data['report']=0
+
+        self._solver_data_structure = urdme_solver_data
 
         return urdme_solver_data
 
