@@ -493,13 +493,15 @@ class URDMEModel(Model):
 
         for species in spec_init:
 
-            if subdomains is None:
-                subdomains = self.species_to_subdomains[species]
 
             if isinstance(species, str):
                 spec_name = species
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[self.listOfSpecies[species]]
             elif isinstance(species ,pyurdme.Species):
                 spec_name = species.name
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[species]
             else:
                 raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
             num_spec = spec_init[species]
@@ -533,12 +535,14 @@ class URDMEModel(Model):
 
         species_map = self.get_species_map()
         for species in spec_init:
-            if subdomains is None:
-                subdomains = self.species_to_subdomains[species]
             if isinstance(species, str):
                 spec_name = species
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[self.listOfSpecies[species]]
             elif isinstance(species ,pyurdme.Species):
                 spec_name = species.name
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[species]
             else:
                 raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
             num_spec = spec_init[species]
