@@ -498,7 +498,7 @@ class URDMEModel(Model):
                 spec_name = species
                 if subdomains is None:
                     subdomains = self.species_to_subdomains[self.listOfSpecies[species]]
-            elif isinstance(species ,pyurdme.Species):
+            elif isinstance(species, Species):
                 spec_name = species.name
                 if subdomains is None:
                     subdomains = self.species_to_subdomains[species]
@@ -539,7 +539,7 @@ class URDMEModel(Model):
                 spec_name = species
                 if subdomains is None:
                     subdomains = self.species_to_subdomains[self.listOfSpecies[species]]
-            elif isinstance(species ,pyurdme.Species):
+            elif isinstance(species, Species):
                 spec_name = species.name
                 if subdomains is None:
                     subdomains = self.species_to_subdomains[species]
@@ -565,7 +565,7 @@ class URDMEModel(Model):
         for species in spec_init:
             if isinstance(species, str):
                 spec_name = species
-            elif isinstance(species ,pyurdme.Species):
+            elif isinstance(species, Species):
                 spec_name = species.name
             else:
                 raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
@@ -589,7 +589,7 @@ class URDMEModel(Model):
         for species in spec_init:
             if isinstance(species, str):
                 spec_name = species
-            elif isinstance(species ,pyurdme.Species):
+            elif isinstance(species, Species):
                 spec_name = species.name
             else:
                 raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
