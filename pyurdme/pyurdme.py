@@ -532,6 +532,7 @@ class URDMEModel(Model):
             self.create_extended_mesh()
 
         self._initialize_species_to_subdomains()
+        self.get_subdomain_vector()
 
         species_map = self.get_species_map()
         for species in spec_init:
@@ -562,6 +563,9 @@ class URDMEModel(Model):
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
 
+        self._initialize_species_to_subdomains()
+        self.get_subdomain_vector()
+
         for species in spec_init:
             if isinstance(species, str):
                 spec_name = species
@@ -585,6 +589,9 @@ class URDMEModel(Model):
 
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
+
+        self._initialize_species_to_subdomains()
+        self.get_subdomain_vector()
 
         for species in spec_init:
             if isinstance(species, str):
@@ -628,10 +635,14 @@ class URDMEModel(Model):
     
         if not hasattr(self, "u0"):
             self.initialize_initial_condition()
+        if not hasattr(self, 'xmesh'):
+            self.create_extended_mesh()
+        self._initialize_species_to_subdomains()
+        sd = self.get_subdomain_vector()
+
         self.u0 = numpy.zeros(self.u0.shape)
         result_sd = result.model.get_subdomain_vector()
         result_coords = result.model.mesh.get_voxels()
-        sd = self.get_subdomain_vector()
         coords = self.mesh.coordinates()
         for s, sname in enumerate(result.model.listOfSpecies):
             scounts = result.get_species(sname, timepoints=-1)
