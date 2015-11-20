@@ -632,11 +632,15 @@ class URDMEModel(Model):
             if smallest_ndx is None:
                 raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords2,my_volume))
             return smallest_ndx
-    
+   
         if not hasattr(self, "u0"):
             self.initialize_initial_condition()
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
+
+        self.get_solver_datastructure()
+        self._solver_data_structure = None #remove cache
+
         self._initialize_species_to_subdomains()
         sd = self.get_subdomain_vector()
 
