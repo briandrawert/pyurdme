@@ -638,9 +638,6 @@ class URDMEModel(Model):
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
 
-        self.get_solver_datastructure()
-        self._solver_data_structure = None #remove cache
-
         self._initialize_species_to_subdomains()
         sd = self.get_subdomain_vector()
 
@@ -648,14 +645,16 @@ class URDMEModel(Model):
         result_sd = result.model.get_subdomain_vector()
         result_coords = result.model.mesh.get_voxels()
         coords = self.mesh.coordinates()
+        species_map = self.get_species_map()
         for s, sname in enumerate(result.model.listOfSpecies):
             scounts = result.get_species(sname, timepoints=-1)
-            sd_list = self.species_to_subdomains.get(s)
+            sd_list = self.species_to_subdomains.get(self.listOfSpecies[sname])
             for from_v_ndx, s_count in enumerate(scounts):
+                vol = result.model.dofvol[from_v_ndx]
                 for _ in range(int(s_count)):
-                    #print "point",result_coords[from_v_ndx]
-                    #self.set_initial_condition_place_near(self, {s:1}, point=result_coords[from_v_ndx], add=True)
-                    self.set_initial_condition_place_near({result.model.listOfSpecies[sname]:1}, result_coords[from_v_ndx], True)
+                    to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx], vol)
+                    specindx = species_map[sname]
+                    self.u0[s,to_v_ndx] += 1
 
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
