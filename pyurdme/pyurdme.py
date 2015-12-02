@@ -84,7 +84,6 @@ class URDMEModel(Model):
         #
         self.sd = []
         self.sd_initialized = False
-        self._solver_data_structure = None
 
         self.mesh = None
         self.xmesh = None
@@ -834,9 +833,6 @@ class URDMEModel(Model):
 
         """
 
-        if self._solver_data_structure is not None:
-            return self._solver_data_structure
-        
         urdme_solver_data = {}
         num_species = self.get_num_species()
 
@@ -928,8 +924,6 @@ class URDMEModel(Model):
         urdme_solver_data['K'] = self.create_connectivity_matrix()
 
         urdme_solver_data['report']=0
-
-        self._solver_data_structure = urdme_solver_data
 
         return urdme_solver_data
 
