@@ -605,7 +605,7 @@ class URDMEModel(Model):
             specindx = species_map[spec_name]
             self.u0[specindx, voxel] = (self.u0[specindx,voxel] if add else 0) + num_spec
 
-    def set_initial_condition_from_result_different_mesh(self, result):
+    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1):
         """ Create the initial conditions for this model from a result object from model with 
             a different mesh (but same number of species, and subdomains).
         """
@@ -646,7 +646,7 @@ class URDMEModel(Model):
         coords = self.mesh.coordinates()
         species_map = self.get_species_map()
         for s, sname in enumerate(result.model.listOfSpecies):
-            scounts = result.get_species(sname, timepoints=-1)
+            scounts = result.get_species(sname, timepoints=timepoint)
             sd_list = self.species_to_subdomains.get(self.listOfSpecies[sname])
             for from_v_ndx, s_count in enumerate(scounts):
                 vol = result.model.dofvol[from_v_ndx]
