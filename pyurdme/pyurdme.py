@@ -629,7 +629,7 @@ class URDMEModel(Model):
                         smallest_ndx = v_ndx
                         smallest_dist = dist[v_ndx]
             if smallest_ndx is None:
-                raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(my_sd,my_coords2,my_volume))
+                raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(sd_list,my_coords2,my_volume))
             return smallest_ndx
    
         if not hasattr(self, "u0"):
