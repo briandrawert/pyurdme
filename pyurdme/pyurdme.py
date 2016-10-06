@@ -615,7 +615,9 @@ class URDMEModel(Model):
             #ref:http://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
             translate_vec = numpy.array(d_orig) - numpy.array(o_orig)
             v_a = numpy.array(o_vec)
+            v_a = v_a / numpy.linalg.norm(v_a)
             v_b = numpy.array(numpy.array(d_vec) - translate_vec)
+            v_b = v_b / numpy.linalg.norm(v_b)
             vv = numpy.cross(v_a, v_b)
             s = numpy.linalg.norm(vv)
             cc = numpy.dot(v_a,v_b)
