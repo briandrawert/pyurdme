@@ -605,10 +605,24 @@ class URDMEModel(Model):
             specindx = species_map[spec_name]
             self.u0[specindx, voxel] = (self.u0[specindx,voxel] if add else 0) + num_spec
 
-    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1):
+    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1, o_orig=None, o_vec=None, d_orig=None, d_vec=None):
         """ Create the initial conditions for this model from a result object from model with 
             a different mesh (but same number of species, and subdomains).
         """
+
+        def translate_vector_basis(o_orig, o_vec, d_orig, d_vec):
+            # will fail of o_vec = -d_vec
+            #ref:http://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
+            translate_vec = numpy.array(d_orig) - numpy.array(o_orig)
+            v_a = numpy.array(o_vec)
+            v_b = numpy.array(numpy.array(d_vec) - translate_vec)
+            vv = numpy.cross(v_a, v_b)
+            s = numpy.linalg.norm(vv)
+            cc = numpy.dot(v_a,v_b)
+            v_cross = numpy.array([[0, -vv[2], vv[1]],[vv[2],0,-vv[0]],[-vv[1],vv[0],0]])
+            RT = numpy.eye(3) + v_cross + numpy.dot(v_cross,v_cross)*(1/(1+cc))
+            return RT, translate_vec
+
         def __find_closest_voxel(local_sd_vec, local_coords_vec, sd_list, my_coords, my_volume=0.0):
             if my_volume > 0:
                 r_max = (3*my_volume/4/numpy.pi)**(1/3)
@@ -644,6 +658,12 @@ class URDMEModel(Model):
         result_sd = result.model.get_subdomain_vector()
         result_coords = result.model.mesh.get_voxels()
         coords = self.mesh.coordinates()
+        if o_orig is not None and o_vec is not None and d_orig is not None and d_vec is not None:
+            sys.stderr.write('set_initial_condition_from_result_different_mesh() doing vector transformation\n')
+            TT, tr = translate_vector_basis(o_orig, o_vec, d_orig, d_vec)
+            sys.stderr.write('TT={0} tr={1}\n'.format(TT,tr))
+            for i in range(len(result_coords)):
+                result_coords[i,:] = TT.dot(result_coords[i,:]) + tr
         species_map = self.get_species_map()
         for s, sname in enumerate(result.model.listOfSpecies):
             scounts = result.get_species(sname, timepoints=timepoint)
