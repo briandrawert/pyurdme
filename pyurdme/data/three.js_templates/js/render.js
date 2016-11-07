@@ -1,6 +1,6 @@
-var renderPyURDMEMesh= function(pyurdme_mesh_json, tmp, solution, alpha, iswireframe, width)
+var renderPyURDMEMesh= function(pyurdme_mesh_json, div_id, solution, alpha, iswireframe, width, camera_x, camera_y, camera_z)
 {
-    var dom = document.getElementById(tmp);
+    var dom = document.getElementById(div_id);
     var scene = new THREE.Scene();
     var height = 0.75 * width;
     var camera = new THREE.PerspectiveCamera( 75, 4.0 / 3.0, 0.1, 1000 );
@@ -44,7 +44,9 @@ var renderPyURDMEMesh= function(pyurdme_mesh_json, tmp, solution, alpha, iswiref
 
     var controls = new THREE.OrbitControls( camera, renderer.domElement );
 
-    camera.position.z = 1;
+    camera.position.x = camera_x;
+    camera.position.y = camera_y;
+    camera.position.z = camera_z;
     
     var spotLight = new THREE.SpotLight(0xffffff, 1, 200, 20, 10);
     spotLight.position.set( 0, 150, 0 );
@@ -82,7 +84,6 @@ var renderParticles = function(tmp, x, y, z, c, radius, width)
 {
     var dom = document.getElementById(tmp);
     var scene = new THREE.Scene();
-    var width = 500;//$("#"+tmp).width();
     var height = 0.75 * width;
     var camera = new THREE.PerspectiveCamera( 75, 4.0 / 3.0, 0.1, 1000 );
     var renderer = new THREE.WebGLRenderer({alpha:true});

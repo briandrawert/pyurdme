@@ -44,8 +44,24 @@ except:
 
 import pickle
 import json
-
 import functools
+
+# module-level variable to for javascript export in IPython/Jupyter notebooks
+__pyurdme_javascript_libraries_loaded = False
+def load_pyurdme_javascript_libraries():
+    global __pyurdme_javascript_libraries_loaded
+    if not __pyurdme_javascript_libraries_loaded:
+        __pyurdme_javascript_libraries_loaded = True
+        import os.path
+        import IPython.display
+        with open(os.path.join(os.path.dirname(__file__),'data/three.js_templates/js/three.js')) as fd:
+            bufa = fd.read()
+        with open(os.path.join(os.path.dirname(__file__),'data/three.js_templates/js/render.js')) as fd:
+            bufb = fd.read()
+        with open(os.path.join(os.path.dirname(__file__),'data/three.js_templates/js/OrbitControls.js')) as fd:
+            bufc = fd.read()
+        IPython.display.display(IPython.display.HTML('<script>'+bufa+bufc+bufb+'</script>'))
+
 
 def deprecated(func):
     '''This is a decorator which can be used to mark functions
@@ -232,8 +248,9 @@ class URDMEModel(Model):
             for ndx, val in enumerate(sd):
                 fd.write("{0},{1}\n".format(ndx, val))
 
-    def display_mesh(self, subdomains, width=500, height=375):
+    def display_mesh(self, subdomains, width=500, height=375, camera=[0,0,1]):
         ''' WebGL display of the wireframe mesh.'''
+        load_pyurdme_javascript_libraries()
         if isinstance(subdomains, int):
             jstr = self._subdomains_to_threejs(subdomains={1:'blue', subdomains:'red'})
         elif isinstance(subdomains, list):
@@ -253,6 +270,10 @@ class URDMEModel(Model):
         # div in Ipython notebook
         displayareaid = str(uuid.uuid4())
         hstr = hstr.replace('###DISPLAYAREAID###', displayareaid)
+        # ###CAMERA_X###, ###CAMERA_Y###, ###CAMERA_Z###
+        hstr = hstr.replace('###CAMERA_X###',str(camera[0]))
+        hstr = hstr.replace('###CAMERA_Y###',str(camera[1]))
+        hstr = hstr.replace('###CAMERA_Z###',str(camera[2]))
         html = '<div style="width: {0}px; height: {1}px;" id="{2}" ></div>'.format(width, height, displayareaid)
         IPython.display.display(IPython.display.HTML(html+hstr))
 
@@ -1230,11 +1251,18 @@ class URDMEMesh(dolfin.Mesh):
     def generate_cube_mesh(cls, L, nx, ny, nz, periodic=False):
         """ Unit Cube (3D) of with nx, ny, nz points in the respective axes, and side length L. """
         try:
-            mesh = dolfin.BoxMesh(0, 0, 0, L, L, L, nx, ny, nz)
+             # Dolfin 1.5.0
+            mesh = dolfin.BoxMesh(0,0,0, L,L,L, nx, ny, nz)
+            
         except (TypeError, NotImplementedError) as e:
-            # for Dolfin 1.6+
-            box = mshr.Box(dolfin.Point(0,0,0), dolfin.Point(L,L,L))
-            mesh = mshr.generate_mesh(box, nx)
+            try:
+                # Dolfin 1.6+
+                mesh = dolfin.BoxMesh(dolfin.Point(0, 0, 0), dolfin.Point(L, L, L), nx, ny, nz)
+            except:
+                # for Dolfin 1.6+
+                box = mshr.Box(dolfin.Point(0,0,0), dolfin.Point(L,L,L))
+                mesh = mshr.generate_mesh(box, nx)
+
         ret = URDMEMesh(mesh)
         if isinstance(periodic, bool) and periodic:
             ret.add_periodic_boundary_condition(CubeMeshPeriodicBoundary(Lx=L, Ly=L, Lz=L))
@@ -1332,7 +1360,8 @@ class URDMEMesh(dolfin.Mesh):
     def _ipython_display_(self, filename=None, colors=None, width=500):
         self.display(filename=filename, colors=colors, width=width)
 
-    def display(self, filename=None, colors=None, width=500):
+    def display(self, filename=None, colors=None, width=500, camera=[0,0,1]):
+        load_pyurdme_javascript_libraries()
         jstr = self.export_to_three_js(colors=colors)
         hstr = None
         with open(os.path.dirname(os.path.abspath(__file__))+"/data/three.js_templates/mesh.html",'r') as fd:
@@ -1346,6 +1375,10 @@ class URDMEMesh(dolfin.Mesh):
         # div in Ipython notebook
         displayareaid=str(uuid.uuid4())
         hstr = hstr.replace('###DISPLAYAREAID###',displayareaid)
+        # ###CAMERA_X###, ###CAMERA_Y###, ###CAMERA_Z###
+        hstr = hstr.replace('###CAMERA_X###',str(camera[0]))
+        hstr = hstr.replace('###CAMERA_Y###',str(camera[1]))
+        hstr = hstr.replace('###CAMERA_Z###',str(camera[2]))
         html = '<div style="width: {0}px; height: {1}px;" id="{2}" ></div>'.format(width, height, displayareaid)
 
         if filename is not None:
@@ -1883,6 +1916,7 @@ class URDMEResult(dict):
         return colors
 
     def display_particles(self,species, time_index, width=500):
+        load_pyurdme_javascript_libraries()
         hstr = self._export_to_particle_js(species, time_index)
         displayareaid=str(uuid.uuid4())
         hstr = hstr.replace('###DISPLAYAREAID###',displayareaid)
@@ -1893,18 +1927,21 @@ class URDMEResult(dict):
         IPython.display.display(IPython.display.HTML(html+hstr))
 
 
-    def display(self, species, time_index, opacity=1.0, wireframe=True, width=500):
+    def display(self, species, time_index, opacity=1.0, wireframe=True, width=500, camera=[0,0,1]):
         """ Plot the trajectory as a PDE style plot. """
+        load_pyurdme_javascript_libraries()
         data = self.get_species(species,time_index,concentration=True)
         fun = DolfinFunctionWrapper(self.model.mesh.get_function_space())
         vec = fun.vector()
-        v2d= self.get_v2d()
         (nd,) = numpy.shape(data)
-        for i in range(nd):
-            vec[i]=data[i]
-            #for i,d in enumerate(data):
-            #   vec[i] = d
-        fun.display(opacity=opacity, wireframe=wireframe, width=width)
+        if nd == len(vec):
+            for i in range(nd):
+                vec[i]=data[i]
+        else:
+            #v2d= self.get_v2d()
+            for i in range(len(vec)):
+                vec[i] = data[i] # shouldn't we use v2d or d2v here?  But it doesn't work if I do.
+        fun.display(opacity=opacity, wireframe=wireframe, width=width, camera=camera)
 
 
 class DolfinFunctionWrapper(dolfin.Function):
@@ -1915,7 +1952,7 @@ class DolfinFunctionWrapper(dolfin.Function):
     def __init__(self, function_space):
         dolfin.Function.__init__(self, function_space)
 
-    def display(self, opacity=1.0, wireframe=True, width=500):
+    def display(self, opacity=1.0, wireframe=True, width=500, camera=[0,0,1]):
         """ Plot the solution in an IPython notebook.
 
             opacity:    controls the degree of transparency
@@ -1930,7 +1967,7 @@ class DolfinFunctionWrapper(dolfin.Function):
         with open(os.path.dirname(os.path.abspath(__file__))+"/data/three.js_templates/solution.html",'r') as fd:
             hstr = fd.read()
         if hstr is None:
-            raise Exception("could note open template mesh.html")
+            raise Exception("could note open template solution.html")
         hstr = hstr.replace('###PYURDME_MESH_JSON###',jstr)
 
         # Create a random id for the display div. This is to avioid multiple plots ending up in the same
@@ -1944,6 +1981,12 @@ class DolfinFunctionWrapper(dolfin.Function):
             hstr = hstr.replace('###WIREFRAME###',"false")
         hstr = hstr.replace('###WIDTH###',str(width))
         height = int(width * 0.75)
+
+        # ###CAMERA_X###, ###CAMERA_Y###, ###CAMERA_Z###
+        hstr = hstr.replace('###CAMERA_X###',str(camera[0]))
+        hstr = hstr.replace('###CAMERA_Y###',str(camera[1]))
+        hstr = hstr.replace('###CAMERA_Z###',str(camera[2]))
+
 
         html = '<div style="width: {0}px; height: {1}px;" id="{2}" ></div>'.format(width, height, displayareaid)
         IPython.display.display(IPython.display.HTML(html+hstr))
@@ -2250,19 +2293,21 @@ class URDMESolver:
                     handle = subprocess.Popen(urdme_solver_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
                     stdout, stderr = handle.communicate()
                 return_code = handle.wait()
-            except OSError as e:
-                print "Error, execution of solver raised an exception: {0}".format(e)
-                print "urdme_solver_cmd = {0}".format(urdme_solver_cmd)
-
-            if return_code != 0:
-                if self.report_level >= 1:
-                    try:
+                if return_code != 0:
+                    if self.report_level >= 1:
                         print stderr, stdout
-                    except Exception as e:
-                        pass
-                print "urdme_solver_cmd = {0}".format(urdme_solver_cmd)
-                raise URDMEError("Solver execution failed, return code = {0}".format(return_code))
-
+                    raise URDMEError(
+                        "Solver execution failed, return code = {0}".format(return_code) +
+                        "\nurdme_solver_cmd = {0}".format(urdme_solver_cmd)
+                    )
+            except OSError as e:
+                # Add urdme command to exception message
+                raise URDMEError(
+                        str(e) +
+                        "\nurdme_solver_cmd = {0}".format(urdme_solver_cmd)
+                )
+                print e.args
+                raise e
 
             #Load the result from the hdf5 output file.
             try:
