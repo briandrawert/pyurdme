@@ -513,10 +513,17 @@ class URDMEModel(Model):
 
         for species in spec_init:
 
-            if subdomains is None:
-                subdomains = self.species_to_subdomains[species]
 
-            spec_name = species.name
+            if isinstance(species, str):
+                spec_name = species
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[self.listOfSpecies[species]]
+            elif isinstance(species, Species):
+                spec_name = species.name
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[species]
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
             num_spec = spec_init[species]
             species_map = self.get_species_map()
             specindx = species_map[spec_name]
@@ -545,13 +552,21 @@ class URDMEModel(Model):
             self.create_extended_mesh()
 
         self._initialize_species_to_subdomains()
+        self.get_subdomain_vector()
 
         species_map = self.get_species_map()
-        for spec in spec_init:
-            if subdomains is None:
-                subdomains = self.species_to_subdomains[spec]
-            spec_name = spec.name
-            num_spec = spec_init[spec]
+        for species in spec_init:
+            if isinstance(species, str):
+                spec_name = species
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[self.listOfSpecies[species]]
+            elif isinstance(species, Species):
+                spec_name = species.name
+                if subdomains is None:
+                    subdomains = self.species_to_subdomains[species]
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
+            num_spec = spec_init[species]
             specindx = species_map[spec_name]
             for ndx in range(len(self.sd)):
                 if self.sd[ndx] in subdomains:
@@ -568,9 +583,17 @@ class URDMEModel(Model):
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
 
-        for spec in spec_init:
-            spec_name = spec.name
-            num_spec = spec_init[spec]
+        self._initialize_species_to_subdomains()
+        self.get_subdomain_vector()
+
+        for species in spec_init:
+            if isinstance(species, str):
+                spec_name = species
+            elif isinstance(species, Species):
+                spec_name = species.name
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
+            num_spec = spec_init[species]
 
             # Find the voxel with center (vertex) nearest to the point
             ix = self.mesh.closest_vertex(point)
@@ -587,13 +610,93 @@ class URDMEModel(Model):
         if not hasattr(self, 'xmesh'):
             self.create_extended_mesh()
 
-        for spec in spec_init:
-            spec_name = spec.name
-            num_spec = spec_init[spec]
+        self._initialize_species_to_subdomains()
+        self.get_subdomain_vector()
+
+        for species in spec_init:
+            if isinstance(species, str):
+                spec_name = species
+            elif isinstance(species, Species):
+                spec_name = species.name
+            else:
+                raise ModelException("{0} is not pyurdme.Species object or name of object".format(species))
+            num_spec = spec_init[species]
 
             species_map = self.get_species_map()
             specindx = species_map[spec_name]
             self.u0[specindx, voxel] = (self.u0[specindx,voxel] if add else 0) + num_spec
+
+    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1, o_orig=None, o_vec=None, d_orig=None, d_vec=None):
+        """ Create the initial conditions for this model from a result object from model with 
+            a different mesh (but same number of species, and subdomains).
+        """
+
+        def translate_vector_basis(o_orig, o_vec, d_orig, d_vec):
+            # will fail of o_vec = -d_vec
+            #ref:http://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
+            translate_vec = numpy.array(d_orig) - numpy.array(o_orig)
+            v_a = numpy.array(o_vec)
+            v_a = v_a / numpy.linalg.norm(v_a)
+            v_b = numpy.array(numpy.array(d_vec) - translate_vec)
+            v_b = v_b / numpy.linalg.norm(v_b)
+            vv = numpy.cross(v_a, v_b)
+            s = numpy.linalg.norm(vv)
+            cc = numpy.dot(v_a,v_b)
+            v_cross = numpy.array([[0, -vv[2], vv[1]],[vv[2],0,-vv[0]],[-vv[1],vv[0],0]])
+            RT = numpy.eye(3) + v_cross + numpy.dot(v_cross,v_cross)*(1/(1+cc))
+            return RT, translate_vec
+
+        def __find_closest_voxel(local_sd_vec, local_coords_vec, sd_list, my_coords, my_volume=0.0):
+            if my_volume > 0:
+                r_max = (3*my_volume/4/numpy.pi)**(1/3)
+                r_max2 = r_max**2
+                xyz_offset = numpy.random.uniform(low=-r_max, high=r_max, size=3) #random direction
+                r_tot = numpy.random.uniform(low=0, high=r_max, size=1) #random distance
+                x_tot = numpy.sqrt(numpy.sum(xyz_offset**2))
+                my_coords2 = my_coords + xyz_offset*(r_tot/x_tot)
+            else:
+                my_coords2 = my_coords
+            reppoint = numpy.tile(my_coords2, (local_coords_vec.shape[0], 1))
+            dist = numpy.sqrt(numpy.sum((coords-reppoint)**2, axis=1))
+            smallest_ndx = None
+            smallest_dist = -1
+            for v_ndx, sd2 in enumerate(local_sd_vec):
+                if sd_list is None or sd2 in sd_list:
+                    if smallest_ndx is None or dist[v_ndx] < smallest_dist:
+                        smallest_ndx = v_ndx
+                        smallest_dist = dist[v_ndx]
+            if smallest_ndx is None:
+                raise URDMEError("Could not find voxel to transfer population to. sd={0}, coords={1}, vol={2}".format(sd_list,my_coords2,my_volume))
+            return smallest_ndx
+   
+        if not hasattr(self, "u0"):
+            self.initialize_initial_condition()
+        if not hasattr(self, 'xmesh'):
+            self.create_extended_mesh()
+
+        self._initialize_species_to_subdomains()
+        sd = self.get_subdomain_vector()
+
+        self.u0 = numpy.zeros(self.u0.shape)
+        result_sd = result.model.get_subdomain_vector()
+        result_coords = result.model.mesh.get_voxels()
+        coords = self.mesh.coordinates()
+        if o_orig is not None and o_vec is not None and d_orig is not None and d_vec is not None:
+            sys.stderr.write('set_initial_condition_from_result_different_mesh() doing vector transformation\n')
+            TT, tr = translate_vector_basis(o_orig, o_vec, d_orig, d_vec)
+            sys.stderr.write('TT={0} tr={1}\n'.format(TT,tr))
+            for i in range(len(result_coords)):
+                result_coords[i,:] = TT.dot(result_coords[i,:]) + tr
+        species_map = self.get_species_map()
+        for s, sname in enumerate(result.model.listOfSpecies):
+            scounts = result.get_species(sname, timepoints=timepoint)
+            sd_list = self.species_to_subdomains.get(self.listOfSpecies[sname])
+            for from_v_ndx, s_count in enumerate(scounts):
+                vol = result.model.dofvol[from_v_ndx]
+                for _ in range(int(s_count)):
+                    to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx], vol)
+                    specindx = species_map[sname]
+                    self.u0[s,to_v_ndx] += 1
 
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
@@ -772,7 +875,7 @@ class URDMEModel(Model):
            K - a (Nvoxel x Nvoxel) connectivity matrix
 
         """
-        
+
         urdme_solver_data = {}
         num_species = self.get_num_species()
 
