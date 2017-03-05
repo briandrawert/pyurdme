@@ -626,7 +626,7 @@ class URDMEModel(Model):
             specindx = species_map[spec_name]
             self.u0[specindx, voxel] = (self.u0[specindx,voxel] if add else 0) + num_spec
 
-    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1, o_orig=None, o_vec=None, d_orig=None, d_vec=None):
+    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1, o_orig=None, o_vec=None, d_orig=None, d_vec=None, rotate_rad=None):
         """ Create the initial conditions for this model from a result object from model with 
             a different mesh (but same number of species, and subdomains).
         """
@@ -645,6 +645,22 @@ class URDMEModel(Model):
             v_cross = numpy.array([[0, -vv[2], vv[1]],[vv[2],0,-vv[0]],[-vv[1],vv[0],0]])
             RT = numpy.eye(3) + v_cross + numpy.dot(v_cross,v_cross)*(1/(1+cc))
             return RT, translate_vec
+
+        def rotate_vector_basis(o_orig, o_vec, rotate_rad):
+            # ref: 'Rotation matrix from axis and angle' from https://en.wikipedia.org/wiki/Rotation_matrix
+            v_a = numpy.array(o_vec)
+            v_a = v_a / numpy.linalg.norm(v_a)
+            RT = numpy.zeros((3,3))
+            RT[0,0] = numpy.cos(rotate_rad)  + v_a[0]*v_a[0]*(1-numpy.cos(rotate_rad))
+            RT[0,1] = v_a[1]*v_a[0]*(1-numpy.cos(rotate_rad)) + v_a[2]*numpy.sin(rotate_rad)
+            RT[0,2] = v_a[2]*v_a[0]*(1-numpy.cos(rotate_rad)) - v_a[1]*numpy.sin(rotate_rad)
+            RT[1,0] = v_a[0]*v_a[1]*(1-numpy.cos(rotate_rad)) - v_a[2]*numpy.sin(rotate_rad)
+            RT[1,1] = numpy.cos(rotate_rad) + v_a[1]*v_a[1]*(1-numpy.cos(rotate_rad))
+            RT[1,2] = v_a[2]*v_a[1]*(1-numpy.cos(rotate_rad)) + v_a[0]*numpy.sin(rotate_rad)
+            RT[2,0] = v_a[0]*v_a[2]*(1-numpy.cos(rotate_rad)) + v_a[1]*numpy.sin(rotate_rad)
+            RT[2,1] = v_a[1]*v_a[2]*(1-numpy.cos(rotate_rad)) - v_a[0]*numpy.sin(rotate_rad)
+            RT[2,2] = numpy.cos(rotate_rad) + v_a[2]*v_a[2]*(1-numpy.cos(rotate_rad))
+            return RT
 
         def __find_closest_voxel(local_sd_vec, local_coords_vec, sd_list, my_coords, my_volume=0.0):
             if my_volume > 0:
@@ -688,6 +704,13 @@ class URDMEModel(Model):
             for i in range(len(result_coords)):
                 result_coords[i,:] = TT.dot(result_coords[i,:]) + tr
         species_map = self.get_species_map()
+        if o_orig is not None and o_vec is not None and rotate_rad is not None:
+            sys.stderr.write('set_initial_condition_from_result_different_mesh() doing rotation transformation\n')
+            TT = rotate_vector_basis(o_orig, o_vec, rotate_rad)
+            sys.stderr.write('TT={0}\n'.format(TT))
+            for i in range(len(result_coords)):
+                result_coords[i,:] = TT.dot(result_coords[i,:])
+
         for s, sname in enumerate(result.model.listOfSpecies):
             scounts = result.get_species(sname, timepoints=timepoint)
             sd_list = self.species_to_subdomains.get(self.listOfSpecies[sname])
