@@ -446,7 +446,7 @@ class URDMEModel(Model):
                 sdvec.set_all(1)
                 for id, inst in self.subdomains.iteritems():
                     inst.mark(sdvec, id)
-                subdomains[sdvec.dim()] = sdvec
+                subdomains[inst.dim()] = sdvec
 
             for dim, subdomain in subdomains.items():
                 if dim == 0:
@@ -876,6 +876,41 @@ class URDMEModel(Model):
         rows, cols, vals = dolfin.as_backend_type(K).data()
         Kcrs = scipy.sparse.csc_matrix((vals, cols, rows))
         return Kcrs
+
+    def RBF_assembly(self, vol, sd, p):
+        """ Use Radial Basis Functions (RBF) to assemble an alternative diffusion matrix
+        
+            Returns: D matrix (sparse format)
+            
+            Arguments:
+             vol  - the volume vector
+             sd   - the subdomain vector
+             p - the vertex coordinates
+        """
+        #TODO: finish
+        Nspecies = self.get_num_species()
+        Ndofs = len(vol)*Nspecies
+        species_names = model.listOfSpecies.keys()
+        D = scipy.sparse.csc_matrix((Ndofs,Ndofs),dtype=float)
+        
+        for vndx_out in range(len(vol)):
+            for sndx_out in range(Nspecies):
+                dofndx_out = vndx*Nspecies+sndx
+                for vndx_in in range(len(vol)):
+                    for sndx_in in range(Nspecies):
+                        dofndx_in = vndx*Nspecies+sndx
+                        if dofndx_out == dofndx_in:
+                            pass  # diagional, do in 2nd pass
+                        else:
+                            # check if species can diffuse to this voxel (subdomain)
+                            if sd[vndx_in] in model.species_to_subdomains[model.listOfSpecies[sndx_out]]:
+                                dist2 = ( p[vndx_out,:] - p[vndx_in,:])**2
+                                D[dofndx_out,dofndx_in] =
+                                D[dofndx_in,dofndx_out] = D[dofndx_out,dofndx_in]
+        
+            
+        return (D)
+
 
     def get_solver_datastructure(self):
         """ Return the datastructures needed by the URDME solvers.
