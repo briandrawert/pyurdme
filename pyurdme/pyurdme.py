@@ -754,15 +754,15 @@ class URDMEModel(Model):
             if verbose:
                 sys.stderr.write("Transfering species '{0}' as '{1}'\n".format(sname, species_map[sname]))
         
-        
             scounts = result.get_species(sname, timepoints=timepoint)
             model_sname = species_map[sname]
+            model_species_map = self.get_species_map()
             sd_list = self.species_to_subdomains.get(self.listOfSpecies[model_sname])
             for from_v_ndx, s_count in enumerate(scounts):
                 vol = result.model.dofvol[from_v_ndx]
                 for _ in range(int(s_count)):
                     to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx], vol)
-                    specindx = species_map[sname]
+                    specindx = model_species_map[model_sname]
                     self.u0[specindx,to_v_ndx] += 1
 
     def create_system_matrix(self):
