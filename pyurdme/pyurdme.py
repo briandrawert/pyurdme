@@ -626,9 +626,28 @@ class URDMEModel(Model):
             specindx = species_map[spec_name]
             self.u0[specindx, voxel] = (self.u0[specindx,voxel] if add else 0) + num_spec
 
-    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1, o_orig=None, o_vec=None, d_orig=None, d_vec=None, rotate_rad=None):
+    def set_initial_condition_from_result_different_mesh(self, result, timepoint=-1,
+                                o_orig=None, o_vec=None, d_orig=None, d_vec=None, rotate_rad=None,
+                                overwrite=True, verbose=False, error_on_missing_species=True, species_map=None):
         """ Create the initial conditions for this model from a result object from model with 
             a different mesh (but same number of species, and subdomains).
+            
+            Parameters:
+            result : URDMEResult object, required, simulation result to transfer state from,
+            timepoint : int, default -1, time index in result object to transfer state from,
+            o_orig : list of 3 floats, optional, <x,y,z> coordinates of origin in previous model frame of reference,
+            o_vec  : list of 3 floats, optional, <x,y,z> coordinates of a vector in previous model frame of reference,
+            d_orig : list of 3 floats, optional, <x,y,z> coordinates of origin in new model frame of reference,
+            d_vec  : list of 3 floats, optional, <x,y,z> coordinates of a vector in new model frame of reference,
+            rotate_rad : float, optional, rotation angle in radians,
+            overwrite : bool, default True, erase any prior initial conditions,
+            verbose : bool, default False, verbose messages
+            error_on_missing_species : bool, default True, raise Excpetion if a species exists in the result, but not in the model
+            species_map : dict, optional, keys are the names of species in the result, values are the name
+            
+            if o_orig, o_vec, d_orig, and d_vec are specified, then the result values will be vector transformed.
+            if o_orig, o_vec, and rotate_rad are specified, then the result values will be rotated about the vector.
+            if species_map is specified, only the species
         """
 
         def translate_vector_basis(o_orig, o_vec, d_orig, d_vec):
@@ -693,33 +712,58 @@ class URDMEModel(Model):
         self._initialize_species_to_subdomains()
         sd = self.get_subdomain_vector()
 
-        self.u0 = numpy.zeros(self.u0.shape)
+        if overwrite:
+            self.u0 = numpy.zeros(self.u0.shape)
+            
+
+        coords = self.mesh.coordinates()
         result_sd = result.model.get_subdomain_vector()
         result_coords = result.model.mesh.get_voxels()
-        coords = self.mesh.coordinates()
+        # Species maps needs to be Result_Species => Model_Species
+        if species_map is None:
+            species_map = {}
+            for k in self.listOfSpecies:
+                species_map[k] = k
+        else:
+            error_on_missing_species = False
+        
         if o_orig is not None and o_vec is not None and d_orig is not None and d_vec is not None:
-            sys.stderr.write('set_initial_condition_from_result_different_mesh() doing vector transformation\n')
+            if verbose:
+                sys.stderr.write('set_initial_condition_from_result_different_mesh() doing vector transformation\n')
             TT, tr = translate_vector_basis(o_orig, o_vec, d_orig, d_vec)
-            sys.stderr.write('TT={0} tr={1}\n'.format(TT,tr))
+            if verbose:
+                sys.stderr.write('TT={0} tr={1}\n'.format(TT,tr))
             for i in range(len(result_coords)):
                 result_coords[i,:] = TT.dot(result_coords[i,:]) + tr
-        species_map = self.get_species_map()
         if o_orig is not None and o_vec is not None and rotate_rad is not None:
-            sys.stderr.write('set_initial_condition_from_result_different_mesh() doing rotation transformation\n')
+            if verbose:
+                sys.stderr.write('set_initial_condition_from_result_different_mesh() doing rotation transformation\n')
             TT = rotate_vector_basis(o_orig, o_vec, rotate_rad)
-            sys.stderr.write('TT={0}\n'.format(TT))
+            if verbose:
+                sys.stderr.write('TT={0}\n'.format(TT))
             for i in range(len(result_coords)):
                 result_coords[i,:] = TT.dot(result_coords[i,:])
 
         for s, sname in enumerate(result.model.listOfSpecies):
+            if sname not in species_map:
+                if error_on_missing_species:
+                    raise ModelException("Species '{0}' found in result, but not in model".format(sname))
+                if verbose:
+                    sys.stderr.write("Not transfering species '{0}'\n".format(sname))
+                continue
+            if verbose:
+                sys.stderr.write("Transfering species '{0}' as '{1}'\n".format(sname, species_map[sname]))
+        
             scounts = result.get_species(sname, timepoints=timepoint)
-            sd_list = self.species_to_subdomains.get(self.listOfSpecies[sname])
+            model_sname = species_map[sname]
+            model_species_map = self.get_species_map()
+            sd_list = self.species_to_subdomains.get(self.listOfSpecies[model_sname])
             for from_v_ndx, s_count in enumerate(scounts):
                 vol = result.model.dofvol[from_v_ndx]
                 for _ in range(int(s_count)):
                     to_v_ndx = __find_closest_voxel(sd, coords, sd_list, result_coords[from_v_ndx], vol)
-                    specindx = species_map[sname]
-                    self.u0[s,to_v_ndx] += 1
+                    specindx = model_species_map[model_sname]
+                    self.u0[specindx,to_v_ndx] += 1
 
     def create_system_matrix(self):
         """ Create the system (diffusion) matrix for input to the URDME solvers. The matrix
