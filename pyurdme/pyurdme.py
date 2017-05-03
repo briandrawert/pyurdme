@@ -943,7 +943,7 @@ class URDMEModel(Model):
         #TODO: finish
         Nspecies = self.get_num_species()
         Ndofs = len(vol)*Nspecies
-        species_names = model.listOfSpecies.keys()
+        species_names = self.listOfSpecies.keys()
         D = scipy.sparse.csc_matrix((Ndofs,Ndofs),dtype=float)
         K = scipy.sparse.csc_matrix((len(vol),len(vol)),dtype=float)
         vertex_to_dof = dolfin.vertex_to_dof_map(self.mesh.get_function_space())
@@ -989,13 +989,13 @@ class URDMEModel(Model):
         # Create diffusion matrix
         for vndx_out in range(len(vol)):
             for vndx_in in range(vndx_out):
-                for sndx, sname in enumerate(model.listOfSpecies):
+                for sndx, sname in enumerate(self.listOfSpecies):
                     # check if species can diffuse to this voxel (subdomain)
-                    if sd[vndx_in] in model.species_to_subdomains[model.listOfSpecies[sndx]]:
+                    if sd[vndx_in] in self.species_to_subdomains[self.listOfSpecies[sndx]]:
                         # use vertex_to_dof map here
                         dofndx_out = vertex_to_dof[vndx_out*Nspecies+sndx]
                         dofndx_in = vertex_to_dof[vndx_in*Nspecies+sndx]
-                        D[dofndx_out,dofndx_in] = K[vndx_out,vndx_in]*model.listOfSpecies[sndx].diffusion_constant
+                        D[dofndx_out,dofndx_in] = K[vndx_out,vndx_in]*self.listOfSpecies[sndx].diffusion_constant
                         D[dofndx_in,dofndx_out] = D[dofndx_out,dofndx_in]
         
         # Replace the data in the cache
