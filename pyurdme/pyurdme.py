@@ -447,7 +447,7 @@ class URDMEModel(Model):
                 sdvec.set_all(1)
                 for id, inst in self.subdomains.iteritems():
                     inst.mark(sdvec, id)
-                subdomains[inst.dim()] = sdvec
+                subdomains[sdvec.dim()] = sdvec
 
             for dim, subdomain in subdomains.items():
                 if dim == 0:
