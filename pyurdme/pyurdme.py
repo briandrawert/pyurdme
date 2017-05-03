@@ -95,6 +95,7 @@ class URDMEModel(Model):
     def __init__(self, name=""):
         Model.__init__(self, name)
 
+        self.urdme_solver_data = None
         # Currently not used
         self.geometry = None
         #
@@ -921,39 +922,86 @@ class URDMEModel(Model):
         Kcrs = scipy.sparse.csc_matrix((vals, cols, rows))
         return Kcrs
 
-    def RBF_assembly(self, vol, sd, p):
+    def RBF_assembly(self, min_connections=None, max_connections=None, cutoff_ratio=0.001):
         """ Use Radial Basis Functions (RBF) to assemble an alternative diffusion matrix
         
-            Returns: D matrix (sparse format)
+            Replaces D. the Diffusion matrix, and K the connectivity matrix, in the cached 
             
-            Arguments:
-             vol  - the volume vector
-             sd   - the subdomain vector
-             p - the vertex coordinates
+            use get_solver_datastructure() to access the values
+            
+            Args:
+              min_connections, int, default None.  Minimum number of connections to keep for node
+              max_connections, int, default None.  Maximum number of connections to keep for node
+              cutoff_ratio, float, default 0.001.
+
         """
+        # Call solver data structure, get cached result
+        self.get_solver_datastructure()
+        vol = self.urdme_solver_data['vol']
+        sd = self.urdme_solver_data['sd']
+        p = self.urdme_solver_data['p']
         #TODO: finish
         Nspecies = self.get_num_species()
         Ndofs = len(vol)*Nspecies
         species_names = model.listOfSpecies.keys()
         D = scipy.sparse.csc_matrix((Ndofs,Ndofs),dtype=float)
-        
+        K = scipy.sparse.csc_matrix((len(vol),len(vol)),dtype=float)
+        vertex_to_dof = dolfin.vertex_to_dof_map(self.mesh.get_function_space())
+
+
         for vndx_out in range(len(vol)):
-            for sndx_out in range(Nspecies):
-                dofndx_out = vndx*Nspecies+sndx
-                for vndx_in in range(len(vol)):
-                    for sndx_in in range(Nspecies):
-                        dofndx_in = vndx*Nspecies+sndx
-                        if dofndx_out == dofndx_in:
-                            pass  # diagional, do in 2nd pass
-                        else:
-                            # check if species can diffuse to this voxel (subdomain)
-                            if sd[vndx_in] in model.species_to_subdomains[model.listOfSpecies[sndx_out]]:
-                                dist2 = ( p[vndx_out,:] - p[vndx_in,:])**2
-                                D[dofndx_out,dofndx_in] =
-                                D[dofndx_in,dofndx_out] = D[dofndx_out,dofndx_in]
+            for vndx_in in range(vndx_out):
+                if vndx_out == vndx_in:
+                    pass  # diagional, do in 2nd pass
+                else:
+                    dist = numpy.linalg.norm( p[vndx_out,:] - p[vndx_in,:])
+                    ##
+                    dist_in = vol[vndx_in]/(vol[vndx_in]+vol[vndx_out])*dist
+                    dist_out = vol[vndx_out]/(vol[vndx_in]+vol[vndx_out])*dist
+                    # \int_3D exp(-(x^2)/a) dx = \pi^(3/2) a^(3/2)
+                    # vol = \pi^(3/2) a^(3/2)
+                    # a = (vol / \pi^(3/2))^(2/3)
+                    sigma_in = (vol[vndx_in]/(numpy.pi**(3.0/2.0)))**(2.0/3.0)
+                    sigma_out = (vol[vndx_out]/(numpy.pi**(3.0/2.0)))**(2.0/3.0)
+                    # \int_-\inf^\inf exp(-(x^2)/a) dx = \sqrt(\pi*a)
+                    connectivity = numpy.pi**(3.0/2.0)*((sigma_in**(3.0/2.0))*erfc(dist_in) + (sigma_out**(3.0/2.0))*erfc(dist_out))
+                    K[vndx_out,vndx_in] = connectivity
+                    K[vndx_in,vndx_out] = connectivity
+
+        # Trim the connectivity matrix
+        if cutoff_ratio is not None and cutoff_ratio > 0.0:
+            for vndx in range(len(vol)):
+                col_total = numpy.sum(K[:,vndx])
+                sort_list = numpy.argsort(K[:,vndx])
+                # zero out elements below the cutoff
+                for n,ndx in enumerate(sort_list):
+                    if min_connections is not None and n < min_connections:
+                        continue
+                    if (max_connections is not None and n > max_connections) or (K[ndx,vndx] < col_total*cutoff_ratio):
+                        K[ndx,vndx] = 0
+        # Clean up zero entries
+        K.eliminate_zeros()
+
+        # Rescale diagional entries
+        for vndx in range(len(vol)):
+            K[vndx,vndx] = -1*numpy.sum(K[:,vndx])
+
+        # Create diffusion matrix
+        for vndx_out in range(len(vol)):
+            for vndx_in in range(vndx_out):
+                for sndx, sname in enumerate(model.listOfSpecies):
+                    # check if species can diffuse to this voxel (subdomain)
+                    if sd[vndx_in] in model.species_to_subdomains[model.listOfSpecies[sndx]]:
+                        # use vertex_to_dof map here
+                        dofndx_out = vertex_to_dof[vndx_out*Nspecies+sndx]
+                        dofndx_in = vertex_to_dof[vndx_in*Nspecies+sndx]
+                        D[dofndx_out,dofndx_in] = K[vndx_out,vndx_in]*model.listOfSpecies[sndx].diffusion_constant
+                        D[dofndx_in,dofndx_out] = D[dofndx_out,dofndx_in]
         
-            
-        return (D)
+        # Replace the data in the cache
+        self.urdme_solver_data['K'] = K
+        self.urdme_solver_data['D'] = D
+
 
 
     def get_solver_datastructure(self):
@@ -978,6 +1026,10 @@ class URDMEModel(Model):
 
         """
 
+        # use a cached version
+        if self.urdme_solver_data is not None:
+            return self.urdme_solver_data
+        
         urdme_solver_data = {}
         num_species = self.get_num_species()
 
@@ -1070,6 +1122,7 @@ class URDMEModel(Model):
 
         urdme_solver_data['report']=0
 
+        self.urdme_solver_data = urdme_solver_data
         return urdme_solver_data
 
 
