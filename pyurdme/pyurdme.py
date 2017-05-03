@@ -15,6 +15,7 @@ import uuid
 import numpy
 import scipy.io
 import scipy.sparse
+import scipy.special
 
 from model import *
 
@@ -964,7 +965,7 @@ class URDMEModel(Model):
                     sigma_in = (vol[vndx_in]/(numpy.pi**(3.0/2.0)))**(2.0/3.0)
                     sigma_out = (vol[vndx_out]/(numpy.pi**(3.0/2.0)))**(2.0/3.0)
                     # \int_-\inf^\inf exp(-(x^2)/a) dx = \sqrt(\pi*a)
-                    connectivity = numpy.pi**(3.0/2.0)*((sigma_in**(3.0/2.0))*erfc(dist_in) + (sigma_out**(3.0/2.0))*erfc(dist_out))
+                    connectivity = numpy.pi**(3.0/2.0)*((sigma_in**(3.0/2.0))*scipy.special.erfc(dist_in) + (sigma_out**(3.0/2.0))*scipy.special.erfc(dist_out))
                     K[vndx_out,vndx_in] = connectivity
                     K[vndx_in,vndx_out] = connectivity
 
