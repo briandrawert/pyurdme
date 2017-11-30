@@ -10,6 +10,8 @@ import tempfile
 import types
 import warnings
 import uuid
+import time
+
 
 
 import numpy
@@ -780,8 +782,6 @@ class URDMEModel(Model):
 
             """
 
-        import time
-
         # Check if the individual stiffness and mass matrices (per species) have been assembled, otherwise assemble them.
         if self.stiffness_matrices is not None and self.mass_matrices is not None:
             stiffness_matrices = self.stiffness_matrices
@@ -923,7 +923,7 @@ class URDMEModel(Model):
         Kcrs = scipy.sparse.csc_matrix((vals, cols, rows))
         return Kcrs
 
-    def RBF_assembly(self, min_connections=None, max_connections=None, cutoff_ratio=0.001):
+    def RBF_assembly(self, min_connections=None, max_connections=None, cutoff_ratio=None, max_distance=None, verbose=False):
         """ Use Radial Basis Functions (RBF) to assemble an alternative diffusion matrix
         
             Replaces D. the Diffusion matrix, and K the connectivity matrix, in the cached 
@@ -931,11 +931,12 @@ class URDMEModel(Model):
             use get_solver_datastructure() to access the values
             
             Args:
-              min_connections, int, default None.  Minimum number of connections to keep for node
-              max_connections, int, default None.  Maximum number of connections to keep for node
-              cutoff_ratio, float, default 0.001.
+              min_connections, int, default None.  Minimum number of connections to keep for node.
+              max_connections, int, default None.  Maximum number of connections to keep for node.
+              cutoff_ratio, float, default 0.001.  Set to None to disable.
 
         """
+        tic = time.time()
         # Call solver data structure, get cached result
         self.get_solver_datastructure()
         vol = self.urdme_solver_data['vol']
@@ -944,64 +945,132 @@ class URDMEModel(Model):
         #TODO: finish
         Nspecies = self.get_num_species()
         Ndofs = len(vol)*Nspecies
+        Nvoxels = len(vol)
         species_names = self.listOfSpecies.keys()
-        D = scipy.sparse.csc_matrix((Ndofs,Ndofs),dtype=float)
-        K = scipy.sparse.csc_matrix((len(vol),len(vol)),dtype=float)
+        # Create the D matrix in LIL or DOK format for efficiency
+        D = scipy.sparse.lil_matrix((Ndofs,Ndofs),dtype=float)
+        K = scipy.sparse.lil_matrix((Nvoxels,Nvoxels),dtype=float)
         vertex_to_dof = dolfin.vertex_to_dof_map(self.mesh.get_function_space())
 
+        # Create the K matrix
+        if verbose:
+            sys.stderr.write('RBF: Creating K matrix. {0}\n'.format(time.time()-tic))
+            sys.stderr.flush()
+        for vndx_out in range(Nvoxels):
+            if verbose and vndx_out%10==0:
+                sys.stderr.write('RBF: K matrix, column {1}/{2}. {0}\n'.format(time.time()-tic,vndx_out,Nvoxels))
+                sys.stderr.flush()
+###########
+#
+#  integrate exp((-x^2)/a)  from x= b to infinity
+#
+#  = 1/2*sqrt(pi)*sqrt(a)*erfc(b/sqrt(a))
+#
+##############
+#            # Use a numpy.array for each column when creating, assign to matrix as column
+#            column_tmp = numpy.zeros((Nvoxels,1),dtype=float)
+#            for vndx_in in range(0,vndx_out):
+#                # Copy previously computed elements from K
+#                column_tmp[vndx_in,0] = K[vndx_out,vndx_in]
+#            for vndx_in in range(vndx_out+1,Nvoxels):
+#                if vndx_out == vndx_in:
+#                    pass  # diagional, do in 2nd pass
+#                else:
+#                    dist = numpy.linalg.norm( p[vndx_out,:] - p[vndx_in,:])
+#                    if dist > 5: continue  # erfc(5) ~= e-12
+#                    ##
+#                    dist_in = vol[vndx_in]/(vol[vndx_in]+vol[vndx_out])*dist
+#                    dist_out = vol[vndx_out]/(vol[vndx_in]+vol[vndx_out])*dist
+#                    # \int_3D exp(-(x^2)/a) dx = \pi^(3/2) a^(3/2)
+#                    # vol = \pi^(3/2) a^(3/2)
+#                    # a = (vol / \pi^(3/2))^(2/3)
+#                    #sigma_in = (vol[vndx_in])**(2.0/3.0) # after we cancel, we just get vol back
+#                    #sigma_out = (vol[vndx_out])**(2.0/3.0)
+#                    # \int_-\inf^\inf exp(-(x^2)/a) dx = \sqrt(\pi*a)
+#                    connectivity = vol[vndx_in]*scipy.special.erfc(dist_in) + vol[vndx_out]*scipy.special.erfc(dist_out)
+#                    #K[vndx_out,vndx_in] = connectivity
+#                    #K[vndx_in,vndx_out] = connectivity
+#                    column_tmp[vndx_in,0] = connectivity
+            reppoint = numpy.tile(p[vndx_out], (p.shape[0], 1))
+            dist = numpy.sqrt(numpy.sum((p-reppoint)**2, axis=1))
+            out_v = numpy.ones((len(vol),))*vol[vndx_out]
+            sum_v = vol + out_v
+            in_ratio = vol/sum_v
+            out_ratio = vol[vndx_out]/sum_v  # sigma = vol^(2/3)
+            #column_tmp = out_v*scipy.special.erfc(out_ratio*dist) + vol*scipy.special.erfc(in_ratio*dist)
+            # above, origional version (interection of static basis functoins
+            # below, new: multiply with: int_0^\infty P_i(t) dt
+            # TODO: what is 'D' below???
+            column_tmp = vol[vndx_out]/20/pi/D * (out_v*scipy.special.erfc(out_ratio*dist) + vol*scipy.special.erfc(in_ratio*dist) )
+            # Trim the connectivity matrix
+            #if verbose:
+            #    sys.stderr.write('RBF: Trimming. {0}\n'.format(time.time()-tic))
+            #    sys.stderr.flush()
+            # zero out values further away than max_distance
+            if max_distance is not None:
+                column_tmp[numpy.where(dist>max_distance)] = 0
+            if cutoff_ratio is not None and cutoff_ratio > 0.0:
+                for vndx in range(Nvoxels):
+                    column_tmp[vndx] = 0  #ensure the diagional is zero
+                    col_total = numpy.sum(column_tmp)
+                    sort_list = numpy.argsort(column_tmp)
+                    # zero out elements below the cutoff
+                    for n,ndx in enumerate(reversed(sort_list)):
+                        if min_connections is not None and n < min_connections:
+                            continue
+                        if (max_connections is not None and n > max_connections) or (column_tmp[vndx] < col_total*cutoff_ratio):
+                            column_tmp[vndx] = 0
+            # assign dense vector to sparse matrix
+            K[:,vndx_out] = scipy.sparse.csc_matrix(column_tmp.reshape(Nvoxels,1))
 
-        for vndx_out in range(len(vol)):
-            for vndx_in in range(vndx_out):
-                if vndx_out == vndx_in:
-                    pass  # diagional, do in 2nd pass
-                else:
-                    dist = numpy.linalg.norm( p[vndx_out,:] - p[vndx_in,:])
-                    ##
-                    dist_in = vol[vndx_in]/(vol[vndx_in]+vol[vndx_out])*dist
-                    dist_out = vol[vndx_out]/(vol[vndx_in]+vol[vndx_out])*dist
-                    # \int_3D exp(-(x^2)/a) dx = \pi^(3/2) a^(3/2)
-                    # vol = \pi^(3/2) a^(3/2)
-                    # a = (vol / \pi^(3/2))^(2/3)
-                    sigma_in = (vol[vndx_in]/(numpy.pi**(3.0/2.0)))**(2.0/3.0)
-                    sigma_out = (vol[vndx_out]/(numpy.pi**(3.0/2.0)))**(2.0/3.0)
-                    # \int_-\inf^\inf exp(-(x^2)/a) dx = \sqrt(\pi*a)
-                    connectivity = numpy.pi**(3.0/2.0)*((sigma_in**(3.0/2.0))*scipy.special.erfc(dist_in) + (sigma_out**(3.0/2.0))*scipy.special.erfc(dist_out))
-                    K[vndx_out,vndx_in] = connectivity
-                    K[vndx_in,vndx_out] = connectivity
-
-        # Trim the connectivity matrix
-        if cutoff_ratio is not None and cutoff_ratio > 0.0:
-            for vndx in range(len(vol)):
-                col_total = numpy.sum(K[:,vndx])
-                sort_list = numpy.argsort(K[:,vndx])
-                # zero out elements below the cutoff
-                for n,ndx in enumerate(sort_list):
-                    if min_connections is not None and n < min_connections:
-                        continue
-                    if (max_connections is not None and n > max_connections) or (K[ndx,vndx] < col_total*cutoff_ratio):
-                        K[ndx,vndx] = 0
-        # Clean up zero entries
-        K.eliminate_zeros()
-
-        # Rescale diagional entries
-        for vndx in range(len(vol)):
+        # Set diagional entries
+        if verbose:
+            sys.stderr.write('RBF: K Diagional. {0}\n'.format(time.time()-tic))
+            sys.stderr.flush()
+        for vndx in range(Nvoxels):
             K[vndx,vndx] = -1*numpy.sum(K[:,vndx])
 
+        # Compress
+        K = K.tocsc()
+        K.eliminate_zeros()
+
         # Create diffusion matrix
-        for vndx_out in range(len(vol)):
-            for vndx_in in range(vndx_out):
+        if verbose:
+            sys.stderr.write('RBF: Creating D matrix. {0}\n'.format(time.time()-tic))
+            sys.stderr.flush()
+        for vndx_out in range(Nvoxels):
+            if verbose and vndx_out%10==0:
+                sys.stderr.write('RBF: D matrix, column {1}/{2}. {0}\n'.format(time.time()-tic,vndx_out,Nvoxels))
+                sys.stderr.flush()
+            for vndx_in in range(vndx_out+1,Nvoxels):
                 for sndx, sname in enumerate(self.listOfSpecies):
                     # check if species can diffuse to this voxel (subdomain)
-                    if sd[vndx_in] in self.species_to_subdomains[self.listOfSpecies[sndx]]:
-                        # use vertex_to_dof map here
-                        dofndx_out = vertex_to_dof[vndx_out*Nspecies+sndx]
-                        dofndx_in = vertex_to_dof[vndx_in*Nspecies+sndx]
-                        D[dofndx_out,dofndx_in] = K[vndx_out,vndx_in]*self.listOfSpecies[sndx].diffusion_constant
+                    if sd[vndx_in] in self.species_to_subdomains[self.listOfSpecies[sname]]:
+                        # TODO: use vertex_to_dof map here (or not?)
+                        #dofndx_out = vertex_to_dof[vndx_out]*Nspecies+sndx
+                        #dofndx_in = vertex_to_dof[vndx_in]*Nspecies+sndx
+                        dofndx_out = vndx_out*Nspecies+sndx
+                        dofndx_in = vndx_in*Nspecies+sndx
+                        D[dofndx_out,dofndx_in] = K[vndx_out,vndx_in]*self.listOfSpecies[sname].diffusion_constant /  vol[vndx_out]
                         D[dofndx_in,dofndx_out] = D[dofndx_out,dofndx_in]
-        
+
+        # Set diagional entries
+        if verbose:
+            sys.stderr.write('RBF: D Diagional. {0}\n'.format(time.time()-tic))
+            sys.stderr.flush()
+        for dndx in range(Ndofs):
+            D[dndx,dndx] = -1*numpy.sum(D[:,dndx])
+
+        # Compress
+        D = D.tocsc()
+        D.eliminate_zeros()
+
         # Replace the data in the cache
+        # Convert the matricies to CSC format
         self.urdme_solver_data['K'] = K
         self.urdme_solver_data['D'] = D
+        
+        return K, D
 
 
 
