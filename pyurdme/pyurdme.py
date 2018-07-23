@@ -2538,7 +2538,7 @@ class URDMESolver:
         i = 0
         for R in self.model.listOfReactions:
             func = ""
-            rname = self.model.listOfReactions[R].name
+            rname = 'rxn' + str(uuid.uuid4()).replace('-', '_') #custom names will break compilation
             func += funheader.replace("__NAME__", rname) + "\n{\n"
             if self.model.listOfReactions[R].restrict_to == None or (isinstance(self.model.listOfReactions[R].restrict_to, list) and len(self.model.listOfReactions[R].restrict_to) == 0):
                 func += self.model.listOfReactions[R].propensity_function
