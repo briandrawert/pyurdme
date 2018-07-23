@@ -117,6 +117,9 @@ class URDMEModel(Model):
         # URDMEDataFunction objects to construct the data vector.
         self.listOfDataFunctions = []
 
+        # list all the initial condition operations
+        self.listOfInitialConditions = []
+
         # Volume of each voxel in the dolfin dof ordering (not vertex ordering).
         self.dofvol = None
 
@@ -187,8 +190,7 @@ class URDMEModel(Model):
 
     def get_species_map(self):
         """ Get the species map, name to index. """
-        if not hasattr(self, 'species_map'):
-            self.__initialize_species_map()
+        self.__initialize_species_map()
 
         return self.species_map
 
@@ -475,6 +477,21 @@ class URDMEModel(Model):
             self.create_extended_mesh()
         nv = self.mesh.get_num_voxels()
         self.u0 = numpy.zeros((ns, nv))
+        
+    def apply_initial_conditions(self):
+        """ Reset initial conditions with all added initial conditions."""
+        # go through the self.listOfInitialConditions
+        for ic in self.listOfInitialConditions:
+            if ic[0] == 'scatter':
+                self._apply_initial_condition_scatter(ic[1],ic[2])
+            elif ic[0] == 'uniformly':
+                self._apply_initial_condition_distribute_uniformly(ic[1],ic[2])
+            elif ic[0] == 'place':
+                self._apply_initial_condition_place_near(ic[1],ic[2],ic[3])
+            elif ic[0] == 'voxel':
+                self._apply_initial_condition_place_voxel(ic[1],ic[2],ic[3])
+            else:
+                raise ModelException("Unknown initial condition {0}".format(ic))
 
     def create_extended_mesh(self):
         """ Extend the primary mesh with information about the degrees of freedom. """
@@ -500,7 +517,11 @@ class URDMEModel(Model):
     # Some utility routines to set initial conditions
     def set_initial_condition_scatter(self, spec_init, subdomains=None):
         """ Scatter an initial number of molecules over the voxels in a subdomain. """
+        self.listOfInitialConditions.append( ['scatter',spec_init, subdomains])
 
+    def _apply_initial_condition_scatter(self, spec_init, subdomains=None):
+        """ Scatter an initial number of molecules over the voxels in a subdomain. """
+        
         if not hasattr(self,"u0"):
             self.initialize_initial_condition()
 
@@ -545,6 +566,11 @@ class URDMEModel(Model):
 
     def set_initial_condition_distribute_uniformly(self, spec_init, subdomains=None):
         """ Place the same number of molecules of the species in each voxel. """
+        self.listOfInitialConditions.append( ['uniformly',spec_init, subdomains])
+    
+        
+    def _apply_initial_condition_distribute_uniformly(self, spec_init, subdomains=None):
+
         if not hasattr(self, "u0"):
             self.initialize_initial_condition()
 
@@ -575,7 +601,9 @@ class URDMEModel(Model):
     
     def set_initial_condition_place_near(self, spec_init, point=None, add=False):
         """ Place all molecules of kind species in the voxel nearest a given point. The species existing previously in this voxel are reset if add is set to False"""
+        self.listOfInitialConditions.append( ['place',spec_init, point, add])
 
+    def _apply_initial_condition_place_near(self, spec_init, point=None, add=False):
 
         if not hasattr(self, "u0"):
             self.initialize_initial_condition()
@@ -603,6 +631,9 @@ class URDMEModel(Model):
 
     def set_initial_condition_place_voxel(self, spec_init, voxel,add=False):
         """Place all molecules of kind species in the given voxel. The species existing previously in this voxel are reset if add is set to False"""
+        self.listOfInitialConditions.append( ['voxel',spec_init, voxel, add])
+
+    def _apply_initial_condition_place_voxel(self, spec_init, voxel,add=False):
 
         if not hasattr(self, "u0"):
             self.initialize_initial_condition()
@@ -995,8 +1026,10 @@ class URDMEModel(Model):
 
         urdme_solver_data['data'] = data
 
-        if not hasattr(self,'u0'):
-            self.initialize_initial_condition()
+        #if not hasattr(self,'u0'):
+        # reset initial conditions and apply all initial condition functions
+        self.initialize_initial_condition()
+        self.apply_initial_conditions()
 
         # Initial Conditions, convert to dof ordering
         u0_dof = numpy.zeros((num_species, num_dofvox))
