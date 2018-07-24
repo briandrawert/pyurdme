@@ -336,7 +336,7 @@ class Reaction():
         for r in self.reactants:
             # Case 1: 2X -> Y
             if self.reactants[r] == 2:
-                propensity_function = "0.5*" +propensity_function+ "*"+r+"*("+r+"-1)"
+                propensity_function = "0.5*" +propensity_function+ "*"+r+"*("+r+"-1)/vol"
             else:
             # Case 3: X1, X2 -> Y;
                 propensity_function += "*"+r
