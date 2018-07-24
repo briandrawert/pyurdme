@@ -2419,6 +2419,8 @@ class URDMESolver:
             print "cmd = {0}".format(cmd)
             raise URDMEError("Compilation of solver failed")
 
+        print "RETURN CODE ",return_code
+
         if return_code != 0:
             try:
                 print handle.stdout.read()
@@ -2483,23 +2485,21 @@ class URDMESolver:
             stdout = ''
             stderr = ''
             try:
-                if self.report_level >= 1:  #stderr & stdout to the terminal
-                    handle = subprocess.Popen(urdme_solver_cmd)
-                else:
-                    handle = subprocess.Popen(urdme_solver_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-                    stdout, stderr = handle.communicate()
+                handle = subprocess.Popen(urdme_solver_cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+                stdout, stderr = handle.communicate()
                 return_code = handle.wait()
             except OSError as e:
                 print "Error, execution of solver raised an exception: {0}".format(e)
                 print "urdme_solver_cmd = {0}".format(urdme_solver_cmd)
 
+
             if return_code != 0:
-                if self.report_level >= 1:
-                    try:
-                        print stderr, stdout
-                    except Exception as e:
-                        pass
-                print "urdme_solver_cmd = {0}".format(urdme_solver_cmd)
+                try:
+                    print stderr
+                    print stdout
+                except Exception as e:
+                    pass
+                #print "urdme_solver_cmd = {0}".format(urdme_solver_cmd)
                 raise URDMEError("Solver execution failed, return code = {0}".format(return_code))
 
 

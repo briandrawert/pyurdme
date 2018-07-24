@@ -1,3 +1,4 @@
+/* B. Drawert 2010-12-12 */
 /* A. Hellander and B. Drawert. */
 #include <string.h>
 #include "urdmemodel.h"
@@ -21,7 +22,7 @@ urdme_output_writer *get_urdme_output_writer(urdme_model *model, char *filename)
     
     writer->datatype = H5Tcopy(H5T_NATIVE_INT);
     
-    printf("Ncells:%i Mspecies: %i",model->Ncells, model->Mspecies);
+    printf("Ncells:%i Mspecies: %i\n",model->Ncells, model->Mspecies);
     int Ndofs = model->Ncells*model->Mspecies;
     
     /* How many timepoints do we log before the buffer is full? */

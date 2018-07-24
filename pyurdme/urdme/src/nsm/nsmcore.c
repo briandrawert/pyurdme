@@ -2,6 +2,7 @@
 
 /* A. Hellander 2012-06-15 (Revision) */
 /* P. Bauer and S. Engblom 2012-04-10 (Revision) */
+/* B. Drawert 2010-12-12 (Revision) */
 /* A. Hellander 2009-11-24 (Revision) */
 /* J. Cullhed 2008-06-18 */
 
@@ -388,7 +389,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             if (report)
                 report(tt,tspan[0],tspan[tlen-1],total_diffusion,total_reactions,errcode,report_level);
             /* Cannot continue. Clear this solution and exit. */
-            break;
+            exit(1);
         }
     }
     

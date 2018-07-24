@@ -1,4 +1,4 @@
-/* Brian Drawert */
+/* B. Drawert 2010-12-12 */
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>   /* errno */

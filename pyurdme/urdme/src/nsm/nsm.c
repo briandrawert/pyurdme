@@ -3,6 +3,7 @@
 /* 
    A. Hellander and B. Drawert 2012-06-15 (Revision)
    P. Bauer and S. Engblom 2012-05-04 (Revision) 
+   B. Drawert 2010-12-12 
    A. Hellander 2009-11-24 
 */
 
@@ -134,7 +135,7 @@ int main(int argc, char *argv[])
 	
 	if (param_case > npar && mxparameters!=NULL) {
 		perror("nsmcore: Fatal error, parameter case is larger than n-dimension in parameter matrix.\n");
-		exit(-2);
+		exit(2);
 	}
 	
 	/* Create global parameter variable for this parameter case. */

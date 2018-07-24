@@ -11,7 +11,7 @@
 #define error_fn mexErrMsgTxt
 #else //-------------------
 #include <stdio.h>
-#define error_fn(a) fprintf(stderr,a);exit(0);
+#define error_fn(a) fprintf(stderr,a);exit(1);
 #endif
 
 void reportFun1(double time, const double t0, const double tend, long int total_diffusion,

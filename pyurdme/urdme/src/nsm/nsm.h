@@ -1,6 +1,7 @@
 /* nsm.h - Header file for NSM-solver. */
 
 /* P. Bauer and S. Engblom 2012-05-04 (Revision) */
+/* B. Drawert 2010-12-12  (Revision) */
 /* A. Hellander 2009-11-24 (Revision) */
 /* J. Cullhed 2008-06-18 */
 

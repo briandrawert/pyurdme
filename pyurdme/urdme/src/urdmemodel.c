@@ -1,3 +1,4 @@
+/* B. Drawert 2010-12-12 */
 /* A. Hellander and B. Drawert. */
 #include <string.h>
 #include "urdmemodel.h"

@@ -1,5 +1,6 @@
 /* binheap.c */
 
+/* B. Drawert 2010-12-12 */
 /* J. Cullhed 2008-08-04. */
 
 /* Binary heap needed by the NRM and NSM. */

@@ -1,5 +1,6 @@
 /* binheap.h */
 
+/* B. Drawert 2010-12-12 */
 /* J. Cullhed 2008-06-18. */
 
 #ifndef BINHEAP__H
