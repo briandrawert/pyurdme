@@ -2419,7 +2419,6 @@ class URDMESolver:
             print "cmd = {0}".format(cmd)
             raise URDMEError("Compilation of solver failed")
 
-        print "RETURN CODE ",return_code
 
         if return_code != 0:
             try:
