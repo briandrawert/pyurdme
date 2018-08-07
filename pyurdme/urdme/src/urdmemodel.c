@@ -355,14 +355,14 @@ int destroy_model(urdme_model *model)
 int dump_results(urdme_model* model, char *filename, char *type){
     /* IN PYURDME, THIS IS NEVER CALLED. IT IS ALWAYS USING HDF5. */
     
-    int Ndofs,tlen,nsol;
+    int Ndofs,tlen;//,nsol;
     int *U;
     U = model->U[0];
     
     
     Ndofs = model->Ncells*model->Mspecies;
     tlen = model->tlen;
-    nsol = model->nsol;
+    //nsol = model->nsol;
     
     
 #ifdef OUTPUT_MAT
@@ -481,7 +481,7 @@ int dump_results(urdme_model* model, char *filename, char *type){
     hid_t h5_output_file;
     herr_t status;
     h5_output_file = H5Fcreate(filename,H5F_ACC_TRUNC, H5P_DEFAULT,H5P_DEFAULT);
-    if (h5_output_file == NULL){
+    if (h5_output_file == 0){
         printf("Failed to write U matrix HDF5 file.");
         exit(-1);
     }

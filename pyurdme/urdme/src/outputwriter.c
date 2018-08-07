@@ -6,6 +6,9 @@
 #include "hdf5.h"
 #include "hdf5_hl.h"
 
+
+hid_t get_hdf5_file(char *filename);
+
 /* This is the maximal buffer size we use to store the solution before writing to file. */
 const size_t MAX_BUFFER_SIZE = 8388608; // 8 MB
 
@@ -51,7 +54,8 @@ urdme_output_writer *get_urdme_output_writer(urdme_model *model, char *filename)
     H5Pset_chunk(writer->plist,2,writer->chunk_dims);
     
     /* Uncommenting this line would enable zlib compression of the file. */
-    herr_t status = H5Pset_deflate (writer->plist, 3);
+    //herr_t status = H5Pset_deflate (writer->plist, 3);
+    H5Pset_deflate (writer->plist, 3);
     //herr_t status = H5Pset_szip(writer->plist,  H5_SZIP_EC_OPTION_MASK, 128);
     
     writer->trajectory_dataset = H5Dcreate2(writer->output_file, "/U", writer->datatype, writer->trajectory_dataspace, H5P_DEFAULT,writer->plist,H5P_DEFAULT);
@@ -83,10 +87,10 @@ void destroy_output_writer(urdme_output_writer *writer)
 hid_t get_hdf5_file(char *filename)
 {
     
-    herr_t status;
+    //herr_t status;
     hid_t h5_file;
     h5_file = H5Fcreate(filename,H5F_ACC_TRUNC, H5P_DEFAULT,H5P_DEFAULT);
-    if (h5_file == NULL){
+    if (h5_file == 0){
         printf("Fatal error. Failed to open HDF5 file.");
         exit(-1);
     }

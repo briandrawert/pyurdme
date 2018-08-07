@@ -111,7 +111,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
  U(:,j) contains the state of the system at tspan(j).
  */
 {
-    double told,tt = tspan[0];
+    double tt = tspan[0];
     double rdelta,rrdelta;
     double rand,cum,old;
     double *srrate,*rrate;
@@ -206,7 +206,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
         
         /* Get the subvolume in which the next event occurred.
          This subvolume is on top of the heap. */
-        told = tt;
+        //told = tt;
         tt   = rtimes[0];
         subvol = node[0];
         
@@ -253,8 +253,13 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             
             /* b) Update the state of the subvolume subvol and sdrate[subvol]. */
             for (i = jcN[re]; i < jcN[re+1]; i++) {
+                int prev_val = xx[subvol*Mspecies+irN[i]];
                 xx[subvol*Mspecies+irN[i]] += prN[i];
-                if (xx[subvol*Mspecies+irN[i]] < 0) errcode = 1;
+                if (xx[subvol*Mspecies+irN[i]] < 0){
+                    errcode = 1;
+                    printf("Netative state detected after reaction %i, subvol %i, species %zu at time %e (was %i now %i)\n",re,subvol,irN[i],tt,prev_val,xx[subvol*Mspecies+irN[i]]);
+                    exit(1);
+                }
                 sdrate[subvol] += Ddiag[subvol*Mspecies+irN[i]]*prN[i];
             }
             

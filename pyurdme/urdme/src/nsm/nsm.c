@@ -140,7 +140,9 @@ int main(int argc, char *argv[])
 	
 	/* Create global parameter variable for this parameter case. */
     parameters = (double *)malloc(mpar*sizeof(double));
-    memcpy(parameters,&matfile_parameters[mpar*(param_case-1)],mpar*sizeof(double));
+    if (mxparameters != NULL) {
+        memcpy(parameters,&matfile_parameters[mpar*(param_case-1)],mpar*sizeof(double));
+    }
     
 	/* Set report level */
 	model->extra_args=malloc(model->num_extra_args*sizeof(void *));
@@ -185,14 +187,14 @@ void nsm(void *data, urdme_output_writer *writer){
 	/* Unpack input */
 	urdme_model* model;
 	model = (urdme_model *)data;
-	int Ndofs;
+	//int Ndofs;
 	
 	/* nsm_core() uses a report function with optional report level. This is
 	 passed as the first extra argument. */ 
 	int report_level = *(int *)model->extra_args[0];
 	
 	/* Output array (to hold a single trajectory) */
-	Ndofs = model->Ncells*model->Mspecies;
+	//Ndofs = model->Ncells*model->Mspecies;
 	
     /* Core simulation routine. */
 	nsm_core(model->irD, model->jcD, model->prD, model->u0,
