@@ -246,9 +246,19 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             rand *= totrate;
             for (re = 0, cum = rrate[subvol*Mreactions]; re < Mreactions && rand > cum; re++, cum += rrate[subvol*Mreactions+re])
             ;
-            
+            int re_decrimented = 0;
             if (re >= Mreactions){
+                re_decrimented++;
                 re--;
+                while(rrate[subvol*Mreactions+re] == 0.0){
+                    re_decrimented++;
+                    re--;
+                    if(re < 0){
+                        printf("ERROR: while selecting the reaction, the random value %e was greater than the reaction total %e.  Decrimented the reaction index %i times, but number of reactions is %i\n",rand,rrate[subvol*Mreactions+(Mreactions-1)],re_decrimented, Mreactions);
+                        exit(1);
+                    }
+                }
+                printf("Propensity sum overflow, reaction found by decrimenting %i times\n",re_decrimented);
             }
             
             /* b) Update the state of the subvolume subvol and sdrate[subvol]. */
@@ -258,6 +268,17 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                 if (xx[subvol*Mspecies+irN[i]] < 0){
                     errcode = 1;
                     printf("Netative state detected after reaction %i, subvol %i, species %zu at time %e (was %i now %i)\n",re,subvol,irN[i],tt,prev_val,xx[subvol*Mspecies+irN[i]]);
+                    printf("re decrimented=%i \n",re_decrimented);
+                    printf("rand = %e \n",rand);
+                    printf("cum = %e \n",cum);
+                    printf("rrate[%i] = %e \n",subvol*Mreactions+re,rrate[subvol*Mreactions+re]);
+                    printf("totrate = %e \n",totrate);
+                    int jj;
+                    double jj_cumsum=0.0;
+                    for(jj=0;jj<Mspecies;jj++){
+                        jj_cumsum += rrate[subvol*Mreactions+jj];
+                        printf("rxn%i rrate[%i]=%e cumsum=%e\n",jj,subvol*Mreactions+jj,rrate[subvol*Mreactions+jj],jj_cumsum);
+                    }
                     exit(1);
                 }
                 sdrate[subvol] += Ddiag[subvol*Mspecies+irN[i]]*prN[i];
