@@ -254,7 +254,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                     re_decrimented++;
                     re--;
                     if(re < 0){
-                        printf("ERROR: while selecting the reaction, the random value %e was greater than the reaction total %e.  Decrimented the reaction index %i times, but number of reactions is %i\n",rand,rrate[subvol*Mreactions+(Mreactions-1)],re_decrimented, Mreactions);
+                        printf("ERROR: while selecting the reaction, the random value %e was greater than the reaction total %e.  Decrimented the reaction index %i times, but number of reactions is %zu\n",rand,rrate[subvol*Mreactions+(Mreactions-1)],re_decrimented, Mreactions);
                         exit(1);
                     }
                 }
@@ -271,13 +271,13 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                     printf("re decrimented=%i \n",re_decrimented);
                     printf("rand = %e \n",rand);
                     printf("cum = %e \n",cum);
-                    printf("rrate[%i] = %e \n",subvol*Mreactions+re,rrate[subvol*Mreactions+re]);
+                    printf("rrate[%lu] = %e \n",subvol*Mreactions+re,rrate[subvol*Mreactions+re]);
                     printf("totrate = %e \n",totrate);
                     int jj;
                     double jj_cumsum=0.0;
                     for(jj=0;jj<Mspecies;jj++){
                         jj_cumsum += rrate[subvol*Mreactions+jj];
-                        printf("rxn%i rrate[%i]=%e cumsum=%e\n",jj,subvol*Mreactions+jj,rrate[subvol*Mreactions+jj],jj_cumsum);
+                        printf("rxn%i rrate[%lu]=%e cumsum=%e\n",jj,subvol*Mreactions+jj,rrate[subvol*Mreactions+jj],jj_cumsum);
                     }
                     exit(1);
                 }
@@ -320,10 +320,11 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             
             /* Search for diffusion direction. */
             for (i = jcD[col], cum = 0.0; i < jcD[col+1]; i++)
-            if (irD[i] != col && (cum += prD[i]) > rand)
-            break;
+                if (irD[i] != col && (cum += prD[i]) > rand)
+                    break;
             
             /* paranoia fix: */
+            // This paranoia fix creates errors if the final rate has a zero propensity.  It can cause negative populations.
             if (i >= jcD[col+1]){
                i--;
             }
@@ -335,6 +336,8 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             xx[subvol*Mspecies+spec]--;
             if (xx[subvol*Mspecies+spec] < 0){
                     errcode = 1;
+                    printf("Netative state detected after diffusion, voxel %i -> %zu, species %i at time %e\n",subvol,to_node,spec,tt);
+                    exit(1);
             }
             xx[to_node]++;
             
@@ -415,6 +418,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             if (report)
                 report(tt,tspan[0],tspan[tlen-1],total_diffusion,total_reactions,errcode,report_level);
             /* Cannot continue. Clear this solution and exit. */
+            printf("Exiting due to errcode %i\n",errcode);
             exit(1);
         }
     }
