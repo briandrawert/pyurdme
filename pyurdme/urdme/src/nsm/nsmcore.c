@@ -19,6 +19,14 @@
 #include "hdf5.h"
 #include "hdf5_hl.h"
 
+void print_current_state(int subvol, int*xx,const size_t Mspecies){
+    int i;
+    printf("Current state in voxel %i:\n",subvol);
+    for(i=0;i<Mspecies;i++){
+        printf("xx[%i] = %i\n",i,xx[subvol*Mspecies+i]);
+    }
+}
+
 
 
 
@@ -113,7 +121,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
 {
     double tt = tspan[0];
     double rdelta,rrdelta;
-    double rand,cum,old;
+    double rand,rand2,cum,cum2,old;
     double *srrate,*rrate;
     double *sdrate,*Ddiag;
     double *rtimes;
@@ -255,6 +263,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                     re--;
                     if(re < 0){
                         printf("ERROR: while selecting the reaction, the random value %e was greater than the reaction total %e.  Decrimented the reaction index %i times, but number of reactions is %zu\n",rand,rrate[subvol*Mreactions+(Mreactions-1)],re_decrimented, Mreactions);
+                        print_current_state(subvol,xx,Mspecies);
                         exit(1);
                     }
                 }
@@ -279,6 +288,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                         jj_cumsum += rrate[subvol*Mreactions+jj];
                         printf("rxn%i rrate[%lu]=%e cumsum=%e\n",jj,subvol*Mreactions+jj,rrate[subvol*Mreactions+jj],jj_cumsum);
                     }
+                    print_current_state(subvol,xx,Mspecies);
                     exit(1);
                 }
                 sdrate[subvol] += Ddiag[subvol*Mspecies+irN[i]]*prN[i];
@@ -312,21 +322,34 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             for (spec = 0, dof = subvol*Mspecies, cum = Ddiag[dof]*xx[dof];
                  spec < Mspecies && rand > cum;
                  spec++, cum += Ddiag[dof+spec]*xx[dof+spec]);
+            if(spec >= Mspecies){
+                printf("Diffusion species overflow\n");
+                spec--;
+                while(xx[dof+spec] <= 0){
+                    spec--;
+                    if(spec <=0){
+                        printf("Error: diffusion event in voxel %i was selected, but no molecues to move\n",subvol);
+                        print_current_state(subvol,xx,Mspecies);
+                        exit(1);
+                    }
+                }
+            }
             
             
             /* b) and then the direction of diffusion. */
             col = dof+spec;
-            rand = drand48()*Ddiag[col];
+            rand2 = drand48()*Ddiag[col];
             
             /* Search for diffusion direction. */
-            for (i = jcD[col], cum = 0.0; i < jcD[col+1]; i++)
-                if (irD[i] != col && (cum += prD[i]) > rand)
+            for (i = jcD[col], cum2 = 0.0; i < jcD[col+1]; i++)
+                if (irD[i] != col && (cum2 += prD[i]) > rand2)
                     break;
             
             /* paranoia fix: */
             // This paranoia fix creates errors if the final rate has a zero propensity.  It can cause negative populations.
             if (i >= jcD[col+1]){
-               i--;
+                printf("Diffusion direction overflow\n");
+                i--;
             }
             
             to_node = irD[i];
@@ -336,7 +359,15 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             xx[subvol*Mspecies+spec]--;
             if (xx[subvol*Mspecies+spec] < 0){
                     errcode = 1;
-                    printf("Netative state detected after diffusion, voxel %i -> %zu, species %i at time %e\n",subvol,to_node,spec,tt);
+                    printf("Negative state detected after diffusion, voxel %i -> %zu, species %i at time %e\n",subvol,to_node,spec,tt);
+                    printf("rand = %e\n",rand);
+                    printf("cum  = %e\n",cum);
+                    printf("rand2 = %e\n",rand);
+                    printf("cum2 = %e\n",cum2);
+                    printf("dof = %i\n",dof);
+                    printf("col = %i\n",col);
+                    printf("i = %zu jcD[col]=%zu jcD[col+1]=%zu\n",i,jcD[col],jcD[col+1]);
+                    print_current_state(subvol,xx,Mspecies);
                     exit(1);
             }
             xx[to_node]++;
@@ -419,6 +450,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                 report(tt,tspan[0],tspan[tlen-1],total_diffusion,total_reactions,errcode,report_level);
             /* Cannot continue. Clear this solution and exit. */
             printf("Exiting due to errcode %i\n",errcode);
+            print_current_state(subvol, xx,Mspecies);
             exit(1);
         }
     }
