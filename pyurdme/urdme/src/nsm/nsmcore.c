@@ -161,8 +161,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             //rrate[i*Mreactions+j] =
             //(*rfun[j])(&xx[i*Mspecies],tt,vol[i],&data[i*dsize],sd[i],i,xx,irK,jcK,prK);
             //srrate[i] += rrate[i*Mreactions+j];
-            rrate[i*Mreactions+j] =
-            (*rfun[j])(&xx[i*Mspecies],tt,vol[i],&data[i*dsize],sd[i]);
+            rrate[i*Mreactions+j] = (*rfun[j])(&xx[i*Mspecies],tt,vol[i],&data[i*dsize],sd[i]);
             srrate[i] += rrate[i*Mreactions+j];
         }
     }
@@ -235,17 +234,41 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
         
         /* First check if it is a reaction or a diffusion event. */
         totrate = srrate[subvol]+sdrate[subvol];
-        rand = drand48();
+        double rand = drand48();
+        double rand1 = drand48();
         
         
-        if (rand*totrate <= srrate[subvol]) {
+        if (rand1 <= srrate[subvol]/totrate) { // use normalized floating point comparision
             /* Reaction event. */
             event = 0;
             
             /* a) Determine the reaction re that did occur (direct SSA). */
-            rand *= totrate;
-            for (re = 0, cum = rrate[subvol*Mreactions]; re < Mreactions && rand > cum; re++, cum += rrate[subvol*Mreactions+re])
+            //rand *= totrate;
+            double rand_rval = rand * srrate[subvol];
+            for (re = 0, cum = rrate[subvol*Mreactions]; re < Mreactions && rand_rval > cum; re++, cum += rrate[subvol*Mreactions+re])
             ;
+            if(re >= Mreactions){
+                if(cum != srrate[subvol]){
+                    printf("Reaction propensity mismatch in voxel %i. re=%i, rrate[subvol]=%e cum=%e rand_rval=%e\n",subvol,re,rrate[subvol],cum,rand_rval);
+                    rdelta = 0.0;
+                    for (j=0;j<Mreactions; j++) {
+                        rdelta += (rrate[subvol*Mreactions+j] = (*rfun[j])(&xx[subvol*Mspecies],tt,vol[subvol],&data[subvol*dsize],sd[subvol]));
+                    }
+                    srrate[subvol] = rdelta;
+                }
+                if(srrate[subvol] == 0.0){ continue; }
+
+
+                double rand_rval2 = rand * srrate[subvol]; // sum of propensitiess is not propensity sum, re-roll
+
+                for (re = 0, cum = rrate[subvol*Mreactions]; re < Mreactions && rand_rval2 > cum; re++, cum += rrate[subvol*Mreactions+re])
+                ;
+                if(re >= Mreactions){ // failed twice, problems!
+                    printf("Propensity sum overflow, rand=%e rand_rval=%e rand_rval2=%e srrate[%i]=%e cum=%e\n",rand,rand_rval,rand_rval2,subvol,srrate[subvol],cum);
+                    exit(1);
+                }
+            }
+            /*
             int re_decrimented = 0;
             if (re >= Mreactions){
                 re_decrimented++;
@@ -254,12 +277,13 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                     re_decrimented++;
                     re--;
                     if(re < 0){
-                        printf("ERROR: while selecting the reaction, the random value %e was greater than the reaction total %e.  Decrimented the reaction index %i times, but number of reactions is %i\n",rand,rrate[subvol*Mreactions+(Mreactions-1)],re_decrimented, Mreactions);
+                        printf("ERROR: while selecting the reaction, the random value %e was greater than the reaction total %e.  Decrimented the reaction index %i times, but number of reactions is %i\n",rand,cum,re_decrimented, Mreactions);
                         exit(1);
                     }
                 }
                 printf("Propensity sum overflow, reaction found by decrimenting %i times\n",re_decrimented);
             }
+            */
             
             /* b) Update the state of the subvolume subvol and sdrate[subvol]. */
             for (i = jcN[re]; i < jcN[re+1]; i++) {
@@ -268,16 +292,33 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
                 if (xx[subvol*Mspecies+irN[i]] < 0){
                     errcode = 1;
                     printf("Netative state detected after reaction %i, subvol %i, species %zu at time %e (was %i now %i)\n",re,subvol,irN[i],tt,prev_val,xx[subvol*Mspecies+irN[i]]);
-                    printf("re decrimented=%i \n",re_decrimented);
+                    //printf("re decrimented=%i \n",re_decrimented);
                     printf("rand = %e \n",rand);
                     printf("cum = %e \n",cum);
+                    printf("re = %i\n", re);
+                    printf("subvol = %i\n",subvol);
                     printf("rrate[%i] = %e \n",subvol*Mreactions+re,rrate[subvol*Mreactions+re]);
+                    printf("srrate[%i] = %e \n",subvol,srrate[subvol]);
+                    printf("sdrate[%i] = %e \n",subvol,sdrate[subvol]);
                     printf("totrate = %e \n",totrate);
+                    printf("Mreactions = %i\n",Mreactions);
+                    printf("total_reactions = %i\n",total_reactions);
+                    printf("total_diffusion = %i\n",total_diffusion);
                     int jj;
-                    double jj_cumsum=0.0;
                     for(jj=0;jj<Mspecies;jj++){
+                        printf("xx[%i] = %i\n",jj,xx[subvol*Mspecies+jj]);
+                    }
+                    double jj_cumsum=0.0;
+                    for(jj=0;jj<Mreactions;jj++){
                         jj_cumsum += rrate[subvol*Mreactions+jj];
                         printf("rxn%i rrate[%i]=%e cumsum=%e\n",jj,subvol*Mreactions+jj,rrate[subvol*Mreactions+jj],jj_cumsum);
+                        printf("\trxn%i_propensity = %e\n",(*rfun[jj])(&xx[subvol*Mspecies],tt,vol[subvol],&data[subvol*dsize],sd[subvol]));
+                    }
+                    for (i = jcG[Mspecies+re]; i < jcG[Mspecies+re+1]; i++) {
+                        printf("G[%i,%i]\n",Mspecies+re, irG[i]);
+                    }
+                    for (i = jcN[re]; i < jcN[re+1]; i++) {
+                        printf("N[%i,%i]=%i\n",re,irN[i],prN[i]);
                     }
                     exit(1);
                 }
@@ -306,8 +347,7 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             event = 1;
             
             /* a) Determine which species... */
-            rand *= totrate;
-            rand -= srrate[subvol];
+            rand *= sdrate[subvol];
             
             for (spec = 0, dof = subvol*Mspecies, cum = Ddiag[dof]*xx[dof];
                  spec < Mspecies && rand > cum;
