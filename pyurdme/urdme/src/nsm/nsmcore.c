@@ -220,19 +220,13 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
         
         /* Store solution if the global time counter tt has passed the
          next time is tspan. */
-        
         if (tt >= tspan[it] || isinf(tt)) {
-            
             for (; it < tlen && (tt >= tspan[it] || isinf(tt)); it++) {
-                
                 if (report){
                     report(tspan[it],tspan[0],tspan[tlen-1],total_diffusion,total_reactions,0,report_level);
                 }
-                
                 write_state(writer,xx);
-                
             }
-            
             /* If the simulation has reached the final time, flush the buffer and exit. */
             if (it >= tlen){
                 flush_buffer(writer);
@@ -240,9 +234,23 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             }
             
         }
+
         
         /* First check if it is a reaction or a diffusion event. */
         totrate = srrate[subvol]+sdrate[subvol];
+
+        if(totrate <= 0){ // Sanity check, is there a non-zero reaction and diffusion propensity
+            totrate = srrate[subvol]+sdrate[subvol];  
+            if (totrate > 0.0)
+                rtimes[0] = -log(1.0-drand48())/totrate+tt;
+            else
+                rtimes[0] = INFINITY;
+            /* Update the heap. */
+            update(0,rtimes,node,heap,Ncells);
+            // go to the next element
+            continue; 
+        }
+
         double rand = drand48();
         double rand1 = drand48();
         
@@ -349,6 +357,16 @@ void nsm_core(const size_t *irD,const size_t *jcD,const double *prD,
             if(spec >= Mspecies){
                 //printf("Diffusion species overflow\n");
                 // try again, 'cum' is a better estimate of the propensity sum
+                if(cum != srrate[subvol]){
+                    printf("Diffusion propensity mismatch in voxel %i. spec=%i, sdrate[subvol]=%e cum=%e diff_rand=%e\n",subvol,spec,sdrate[subvol],cum,diff_rand);
+                    rdelta = 0.0;
+                    for(j = 0; j < Mspecies; j++){
+                        rdelta += Ddiag[i*Mspecies+j]*xx[i*Mspecies+j];
+                    }
+                    sdrate[subvol] = rdelta;
+                }
+                if(sdrate[subvol] == 0.0){ continue; }
+
                 diff_rand = cum *rand;
                 for (spec = 0, dof = subvol*Mspecies, cum = Ddiag[dof]*xx[dof];
                      spec < Mspecies && diff_rand > cum;
