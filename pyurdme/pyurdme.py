@@ -744,6 +744,7 @@ class URDMEModel(Model):
         sd = self.get_subdomain_vector()
 
         if overwrite:
+            self.listOfInitialConditions = []
             self.u0 = numpy.zeros(self.u0.shape)
             
 
@@ -1028,7 +1029,8 @@ class URDMEModel(Model):
 
         #if not hasattr(self,'u0'):
         # reset initial conditions and apply all initial condition functions
-        self.initialize_initial_condition()
+        if not hasattr(self,"u0"):
+            self.initialize_initial_condition()
         self.apply_initial_conditions()
 
         # Initial Conditions, convert to dof ordering
